@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+} from "lucide-react";
 
 import type { ProductCategory } from "@/data/product-categories";
 
@@ -17,51 +20,52 @@ export function CategoryCard({
   return (
     <Link
       href={`/produse?categorie=${category.slug}`}
-      className="group relative flex min-h-[280px] min-w-0 overflow-hidden rounded-sm border border-neutral-800 bg-[#111111] p-5 text-white transition duration-300 hover:border-primary sm:min-h-[330px] sm:p-6 lg:min-h-[360px] lg:p-7 lg:hover:-translate-y-2 lg:hover:shadow-[0_24px_60px_rgba(255,85,0,0.14)]"
+      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111] p-4 text-white shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition-all duration-300 active:scale-[0.985] sm:rounded-sm sm:p-6 lg:hover:-translate-y-1 lg:hover:border-primary/60 lg:hover:shadow-[0_18px_50px_rgba(255,85,0,0.12)]"
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,85,0,0.2),transparent_46%)] opacity-70 transition duration-500 group-hover:opacity-100"
+        className="absolute inset-x-0 top-0 h-1 bg-primary"
       />
 
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:30px_30px] sm:bg-[size:38px_38px]"
-      />
-
-      <span className="font-display absolute right-4 top-3 text-5xl leading-none text-white/[0.04] transition duration-500 group-hover:text-primary/10 sm:right-5 sm:top-4 sm:text-7xl">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-
-      <div className="relative z-10 flex min-w-0 w-full flex-col">
-        <div className="flex items-start justify-between gap-4">
-          <span className="font-condensed min-w-0 text-[11px] font-bold uppercase tracking-[0.16em] text-primary sm:text-xs sm:tracking-[0.2em]">
-            {category.eyebrow}
-          </span>
-
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-white/10 bg-white/5 transition duration-300 group-hover:border-primary group-hover:bg-primary sm:size-11">
-            <ArrowUpRight className="size-4 transition duration-300 group-hover:rotate-45 sm:size-5" />
-          </span>
-        </div>
-
-        <div className="mt-8 flex size-16 items-center justify-center rounded-sm bg-primary text-white shadow-[0_14px_35px_rgba(255,85,0,0.25)] transition duration-300 group-hover:scale-105 sm:mt-12 sm:size-20 lg:mt-14">
+      <div className="flex items-start gap-4">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-[0_8px_24px_rgba(255,85,0,0.28)] transition duration-300 group-hover:scale-105 sm:size-14 sm:rounded-sm">
           <Icon
-            className="size-7 sm:size-9"
-            strokeWidth={1.7}
+            className="size-5 sm:size-6"
+            strokeWidth={1.8}
           />
-        </div>
+        </span>
 
-        <div className="mt-auto pt-8 sm:pt-10">
-          <h3 className="font-display max-w-xs break-words text-3xl uppercase leading-[0.95] tracking-[0.025em] sm:text-4xl">
-            {category.title}
-          </h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-condensed text-[10px] font-bold uppercase tracking-[0.16em] text-primary sm:text-xs">
+                {category.eyebrow}
+              </p>
 
-          <p className="mt-3 line-clamp-3 max-w-sm text-sm leading-6 text-neutral-400 transition group-hover:text-neutral-300 sm:mt-4 sm:leading-7">
+              <h3 className="font-display mt-1 text-[1.75rem] uppercase leading-[0.95] text-white sm:text-3xl">
+                {category.title}
+              </h3>
+            </div>
+
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition duration-300 group-hover:border-primary group-hover:bg-primary">
+              <ArrowUpRight className="size-4" />
+            </span>
+          </div>
+
+          <p className="mt-3 line-clamp-2 text-sm leading-6 text-neutral-400 transition group-hover:text-neutral-300 sm:line-clamp-3">
             {category.description}
           </p>
 
-          <div className="mt-5 h-px w-full overflow-hidden bg-white/10 sm:mt-7">
-            <div className="h-full w-0 bg-primary transition-all duration-500 group-hover:w-full" />
+          <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+            <span className="font-condensed inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.09em] text-white">
+              Vezi produsele
+
+              <ArrowRight className="size-4 text-primary transition-transform duration-300 group-hover:translate-x-1" />
+            </span>
+
+            <span className="font-condensed text-xs font-bold text-neutral-600">
+              {String(index + 1).padStart(2, "0")}
+            </span>
           </div>
         </div>
       </div>

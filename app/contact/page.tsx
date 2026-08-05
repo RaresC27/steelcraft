@@ -79,22 +79,17 @@ export default async function ContactPage({
     : null;
 
   return (
-    <main>
-      <section className="relative overflow-hidden bg-[#0b0b0b] py-20 text-white lg:py-24">
+    <main className="bg-neutral-100">
+      <section className="relative overflow-hidden bg-[#0b0b0b] text-white">
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,85,0,0.24),transparent_40%)]"
+          className="absolute inset-x-0 bottom-0 h-1 bg-primary"
         />
 
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:48px_48px]"
-        />
-
-        <Container className="relative z-10">
+        <Container className="relative py-10 sm:py-14 lg:py-20">
           <nav
             aria-label="Breadcrumb"
-            className="mb-6 flex items-center gap-2 text-sm text-neutral-400"
+            className="flex items-center gap-2 text-xs text-neutral-400 sm:text-sm"
           >
             <Link
               href="/"
@@ -110,102 +105,126 @@ export default async function ContactPage({
             </span>
           </nav>
 
-          <p className="font-condensed text-sm font-bold uppercase tracking-[0.22em] text-primary">
-            Discută cu echipa SteelCraft
-          </p>
+          <div className="mt-8 max-w-3xl sm:mt-10">
+            <p className="font-condensed text-xs font-bold uppercase tracking-[0.18em] text-primary sm:text-sm">
+              Discută cu echipa SteelCraft
+            </p>
 
-          <h1 className="font-display mt-4 max-w-4xl text-6xl uppercase leading-[0.9] tracking-[0.025em] sm:text-7xl lg:text-8xl">
-            Transformăm ideea ta
-            <span className="block text-primary">
-              într-un produs metalic
-            </span>
-          </h1>
+            <h1 className="font-display mt-3 text-[3.2rem] uppercase leading-[0.9] text-white sm:text-6xl lg:text-7xl">
+              Spune-ne ce ai nevoie
+              <span className="block text-primary">
+                iar noi revenim cu soluția
+              </span>
+            </h1>
 
-          <p className="mt-6 max-w-2xl text-base leading-8 text-neutral-300">
-            Trimite-ne detaliile proiectului, dimensiunile și
-            cantitatea dorită. Revenim cu întrebări și o ofertă
-            adaptată solicitării.
-          </p>
+            <p className="mt-5 max-w-2xl text-[15px] leading-7 text-neutral-300 sm:text-base sm:leading-8">
+              Trimite dimensiunile, materialul, cantitatea și
+              orice detaliu relevant despre proiect. Revenim cu
+              întrebări și o ofertă adaptată solicitării tale.
+            </p>
+          </div>
         </Container>
       </section>
 
-      <section className="bg-neutral-50 py-16 lg:py-24">
+      <section className="py-8 sm:py-12 lg:py-20">
         <Container>
-          <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr] lg:gap-14">
-            <aside>
-              <p className="font-condensed text-sm font-bold uppercase tracking-[0.2em] text-primary">
-                Date de contact
-              </p>
+          <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:gap-14">
+            <div className="order-2 space-y-6 lg:order-1">
+              <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:rounded-sm sm:p-7">
+                <p className="font-condensed text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                  Date de contact
+                </p>
 
-              <h2 className="font-display mt-3 text-5xl uppercase leading-[0.95] text-[#111111]">
-                Hai să discutăm
-              </h2>
+                <h2 className="font-display mt-2 text-4xl uppercase leading-none text-[#111111] sm:text-5xl">
+                  Vorbim direct
+                </h2>
 
-              <p className="mt-5 max-w-md text-sm leading-7 text-neutral-600">
-                Pentru o ofertă cât mai exactă, menționează
-                dimensiunile, materialul, cantitatea și modul în
-                care va fi utilizat produsul.
-              </p>
+                <p className="mt-4 text-sm leading-7 text-neutral-600">
+                  Pentru o ofertă cât mai exactă, menționează
+                  dimensiunile, materialul, cantitatea și modul
+                  de utilizare al produsului.
+                </p>
 
-              <div className="mt-8 divide-y divide-neutral-200 border-y border-neutral-200">
-                {contactDetails.map((detail) => {
-                  const Icon = detail.icon;
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  {contactDetails.map((detail) => {
+                    const Icon = detail.icon;
 
-                  const content = (
-                    <div className="group flex items-center gap-4 py-5">
-                      <span className="flex size-12 shrink-0 items-center justify-center rounded-sm bg-[#111111] text-primary transition group-hover:bg-primary group-hover:text-white">
-                        <Icon className="size-5" />
-                      </span>
-
-                      <span>
-                        <span className="font-condensed block text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">
-                          {detail.label}
+                    const content = (
+                      <div className="flex min-h-[84px] items-center gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 transition hover:border-primary/40 hover:bg-white">
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#111111] text-primary">
+                          <Icon className="size-5" />
                         </span>
 
-                        <span className="mt-1 block font-semibold text-[#111111] transition group-hover:text-primary">
-                          {detail.value}
-                        </span>
-                      </span>
-                    </div>
-                  );
+                        <span className="min-w-0">
+                          <span className="font-condensed block text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+                            {detail.label}
+                          </span>
 
-                  if (detail.href) {
-                    return (
-                      <a
-                        key={detail.label}
-                        href={detail.href}
-                      >
-                        {content}
-                      </a>
+                          <span className="mt-1 block break-words text-sm font-semibold text-[#111111]">
+                            {detail.value}
+                          </span>
+                        </span>
+                      </div>
                     );
-                  }
 
-                  return (
-                    <div key={detail.label}>
-                      {content}
-                    </div>
-                  );
-                })}
-              </div>
+                    if (detail.href) {
+                      return (
+                        <a
+                          key={detail.label}
+                          href={detail.href}
+                          className="block"
+                        >
+                          {content}
+                        </a>
+                      );
+                    }
 
-              <div className="mt-8 rounded-sm bg-[#111111] p-6 text-white">
+                    return (
+                      <div key={detail.label}>
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-2xl bg-[#111111] p-5 text-white sm:rounded-sm sm:p-6">
                 <p className="font-condensed text-xs font-bold uppercase tracking-[0.16em] text-primary">
-                  Recomandare
+                  Pentru un răspuns mai rapid
                 </p>
 
                 <p className="mt-3 text-sm leading-7 text-neutral-300">
-                  Poți include în mesaj un desen, dimensiuni sau o
-                  scurtă descriere tehnică. Adăugarea fișierelor va
-                  fi implementată după configurarea stocării.
+                  Include dimensiunile, materialul dorit și
+                  cantitatea aproximativă. Poți adăuga și o
+                  descriere tehnică scurtă a proiectului.
                 </p>
-              </div>
-            </aside>
+              </section>
+            </div>
 
-            <ContactForm
-              selectedProduct={
-                selectedProduct ?? undefined
-              }
-            />
+            <div className="order-1 lg:order-2">
+              <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_14px_45px_rgba(0,0,0,0.06)] sm:rounded-sm sm:p-7 lg:p-8">
+                <div className="mb-6 border-b border-neutral-200 pb-5">
+                  <p className="font-condensed text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                    Solicitare ofertă
+                  </p>
+
+                  <h2 className="font-display mt-2 text-4xl uppercase leading-none text-[#111111] sm:text-5xl">
+                    Detaliile proiectului
+                  </h2>
+
+                  <p className="mt-3 text-sm leading-6 text-neutral-600">
+                    Completează formularul, iar noi revenim cu
+                    informațiile necesare.
+                  </p>
+                </div>
+
+                <ContactForm
+                  selectedProduct={
+                    selectedProduct ?? undefined
+                  }
+                />
+              </div>
+            </div>
           </div>
         </Container>
       </section>
