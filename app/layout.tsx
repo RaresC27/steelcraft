@@ -7,6 +7,8 @@ import {
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { MobileHeader } from "@/components/layout/mobile-header";
 
 import "./globals.css";
 
@@ -47,12 +49,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ro">
-      <body
-        className={`${barlow.variable} ${barlowCondensed.variable} ${bebasNeue.variable} antialiased`}
-      >
-        <SiteHeader />
-        {children}
-          <SiteFooter />
+      <body>
+        <div className="hidden lg:block">
+          <SiteHeader />
+        </div>
+
+        <MobileHeader />
+
+        <div className="min-h-screen pb-24 lg:pb-0">
+          {children}
+        </div>
+
+        <SiteFooter />
+
+        <MobileBottomNav />
       </body>
     </html>
   );
