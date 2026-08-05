@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-
+import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
+
+import { auth } from "@/auth";
 
 export const runtime = "nodejs";
 
@@ -11,15 +11,18 @@ const allowedMimeTypes = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/avif",
 ]);
 
 function createSafeFileName(originalName: string) {
-  const extension = path
-    .extname(originalName)
-    .toLowerCase();
+  const extension =
+    originalName
+      .split(".")
+      .pop()
+      ?.toLowerCase() || "jpg";
 
-  const baseName = path
-    .basename(originalName, extension)
+  const baseName = originalName
+    .replace(/\.[^/.]+$/, "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -31,10 +34,31 @@ function createSafeFileName(originalName: string) {
     .randomUUID()
     .slice(0, 8)}`;
 
-  return `${baseName || "produs"}-${uniquePart}${extension}`;
+  return `${baseName || "produs"}-${uniquePart}.${extension}`;
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+
+  const adminEmail =
+    process.env.ADMIN_EMAIL
+      ?.trim()
+      .toLowerCase();
+
+  if (
+    !session?.user?.email ||
+    session.user.email.trim().toLowerCase() !== adminEmail
+  ) {
+    return NextResponse.json(
+      {
+        error: "Nu ești autorizat.",
+      },
+      {
+        status: 401,
+      },
+    );
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -54,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Format invalid. Sunt acceptate JPG, PNG și WEBP.",
+            "Format invalid. Sunt acceptate JPG, PNG, WEBP și AVIF.",
         },
         {
           status: 400,
@@ -87,31 +111,21 @@ export async function POST(request: Request) {
 
     const fileName = createSafeFileName(file.name);
 
-    const uploadDirectory = path.join(
-      process.cwd(),
-      "public",
-      "uploads",
-      "products",
+    const blob = await put(
+      `products/${fileName}`,
+      file,
+      {
+        access: "public",
+        contentType: file.type,
+        addRandomSuffix: false,
+      },
     );
-
-    await mkdir(uploadDirectory, {
-      recursive: true,
-    });
-
-    const filePath = path.join(
-      uploadDirectory,
-      fileName,
-    );
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    await writeFile(filePath, buffer);
 
     return NextResponse.json(
       {
         message: "Imaginea a fost încărcată.",
-        imagePath: `/uploads/products/${fileName}`,
+        imagePath: blob.url,
+        pathname: blob.pathname,
       },
       {
         status: 201,
@@ -119,7 +133,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error(
-      "Eroare la încărcarea imaginii:",
+      "Eroare la încărcarea imaginii în Vercel Blob:",
       error,
     );
 

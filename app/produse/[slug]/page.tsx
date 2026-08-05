@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
-import { ProductCard } from "@/components/product/product-card";
 import { MobileProductPurchaseBar } from "@/components/product/mobile-product-purchase-bar";
+import { ProductCard } from "@/components/product/product-card";
+import { ProductImageCarousel } from "@/components/product/product-image-carousel";
 import { prisma } from "@/lib/prisma";
 
 type ProductPageProps = {
@@ -31,6 +31,24 @@ export async function generateMetadata({
       name: true,
       shortDescription: true,
       image: true,
+
+      images: {
+        orderBy: [
+          {
+            isPrimary: "desc",
+          },
+          {
+            position: "asc",
+          },
+          {
+            id: "asc",
+          },
+        ],
+        take: 1,
+        select: {
+          url: true,
+        },
+      },
     },
   });
 
@@ -42,16 +60,22 @@ export async function generateMetadata({
     };
   }
 
+  const metadataImage =
+    product.images[0]?.url ??
+    product.image;
+
   return {
     title: product.name,
     description: product.shortDescription,
+
     openGraph: {
       title: product.name,
       description: product.shortDescription,
-      images: product.image
+
+      images: metadataImage
         ? [
             {
-              url: product.image,
+              url: metadataImage,
               alt: product.name,
             },
           ]
@@ -65,28 +89,45 @@ export default async function ProductPage({
 }: ProductPageProps) {
   const { slug } = await params;
 
-  const product = await prisma.product.findFirst({
-    where: {
-      slug,
-      isActive: true,
-      category: {
+  const product =
+    await prisma.product.findFirst({
+      where: {
+        slug,
         isActive: true,
+        category: {
+          isActive: true,
+        },
       },
-    },
-    include: {
-      category: true,
-      specifications: {
-        orderBy: [
-          {
-            position: "asc",
-          },
-          {
-            id: "asc",
-          },
-        ],
+
+      include: {
+        category: true,
+
+        specifications: {
+          orderBy: [
+            {
+              position: "asc",
+            },
+            {
+              id: "asc",
+            },
+          ],
+        },
+
+        images: {
+          orderBy: [
+            {
+              isPrimary: "desc",
+            },
+            {
+              position: "asc",
+            },
+            {
+              id: "asc",
+            },
+          ],
+        },
       },
-    },
-  });
+    });
 
   if (!product) {
     notFound();
@@ -97,28 +138,69 @@ export default async function ProductPage({
       ? Number(product.price)
       : null;
 
-  const numericStock = product.stock ?? 0;
+  const numericStock =
+    product.stock ?? 0;
 
   const canAddToCart =
     product.canBePurchased &&
     numericPrice !== null &&
     numericPrice >= 0;
 
+  /*
+   * Dacă produsul are imagini în ProductImage,
+   * carouselul le folosește în ordinea:
+   * principală → position → id.
+   *
+   * Pentru produsele vechi fără galerie,
+   * folosim câmpul Product.image.
+   */
+  const carouselImages =
+    product.images.length > 0
+      ? product.images.map((image) => ({
+          id: image.id,
+          url: image.url,
+          alt:
+            image.alt?.trim() ||
+            product.name,
+        }))
+      : product.image
+        ? [
+            {
+              id: "legacy-image",
+              url: product.image,
+              alt: product.name,
+            },
+          ]
+        : [];
+
+  /*
+   * Imaginea folosită în coș este cea
+   * principală din galerie sau fallback-ul vechi.
+   */
+  const primaryProductImage =
+    carouselImages[0]?.url ?? null;
+
   const relatedProducts =
     await prisma.product.findMany({
       where: {
         isActive: true,
+
         category: {
           isActive: true,
         },
-        categoryId: product.categoryId,
+
+        categoryId:
+          product.categoryId,
+
         id: {
           not: product.id,
         },
       },
+
       include: {
         category: true,
       },
+
       orderBy: [
         {
           featured: "desc",
@@ -130,6 +212,7 @@ export default async function ProductPage({
           createdAt: "desc",
         },
       ],
+
       take: 3,
     });
 
@@ -149,7 +232,9 @@ export default async function ProductPage({
               Acasă
             </Link>
 
-            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">
+              /
+            </span>
 
             <Link
               href="/produse"
@@ -158,7 +243,9 @@ export default async function ProductPage({
               Produse
             </Link>
 
-            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">
+              /
+            </span>
 
             <Link
               href={`/produse?category=${product.category.slug}`}
@@ -167,7 +254,9 @@ export default async function ProductPage({
               {product.category.name}
             </Link>
 
-            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">
+              /
+            </span>
 
             <span
               aria-current="page"
@@ -182,22 +271,9 @@ export default async function ProductPage({
       {/* Informații principale */}
       <section className="bg-white">
         <div className="mx-auto grid max-w-7xl gap-7 px-3 py-5 sm:px-6 sm:py-10 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-20">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-neutral-200 shadow-sm sm:rounded-sm">
-            {product.image ? (
-              <Image
-                src={product.image}
-                alt={product.name}
-                fill
-                priority
-                className="object-cover"
-                sizes="(min-width: 1024px) 50vw, 100vw"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-500">
-                Imagine indisponibilă
-              </div>
-            )}
-          </div>
+          <ProductImageCarousel
+            images={carouselImages}
+          />
 
           <div className="flex flex-col justify-center px-1 sm:px-0">
             <p className="font-condensed text-xs font-bold uppercase tracking-[0.16em] text-primary sm:text-sm">
@@ -262,20 +338,24 @@ export default async function ProductPage({
             ) : null}
 
             {/*
-             * Butonul normal este afișat doar pe desktop.
-             * Pe telefon folosim MobileProductPurchaseBar.
+             * Butonul normal apare pe desktop.
+             * Pe mobil folosim bara sticky.
              */}
             <div className="mt-8 hidden flex-wrap items-center gap-4 lg:flex">
               {canAddToCart &&
               numericPrice !== null ? (
                 <AddToCartButton
                   product={{
-                    productId: product.id,
+                    productId:
+                      product.id,
                     name: product.name,
                     slug: product.slug,
-                    image: product.image,
-                    price: numericPrice,
-                    stock: numericStock,
+                    image:
+                      primaryProductImage,
+                    price:
+                      numericPrice,
+                    stock:
+                      numericStock,
                   }}
                 />
               ) : (
@@ -288,10 +368,6 @@ export default async function ProductPage({
               )}
             </div>
 
-            {/*
-             * Pentru produsele care nu pot fi cumpărate,
-             * afișăm CTA-ul de ofertă și pe mobil.
-             */}
             {!canAddToCart ? (
               <div className="mt-6 lg:hidden">
                 <Link
@@ -334,15 +410,21 @@ export default async function ProductPage({
                 {product.specifications.map(
                   (specification) => (
                     <div
-                      key={specification.id}
+                      key={
+                        specification.id
+                      }
                       className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4 py-4"
                     >
                       <dt className="text-sm text-neutral-500">
-                        {specification.label}
+                        {
+                          specification.label
+                        }
                       </dt>
 
                       <dd className="text-right text-sm font-semibold text-[#111111]">
-                        {specification.value}
+                        {
+                          specification.value
+                        }
                       </dd>
                     </div>
                   ),
@@ -350,8 +432,8 @@ export default async function ProductPage({
               </dl>
             ) : (
               <p className="mt-5 text-sm leading-7 text-neutral-600">
-                Specificațiile acestui produs vor fi
-                adăugate în curând.
+                Specificațiile acestui produs vor
+                fi adăugate în curând.
               </p>
             )}
           </div>
@@ -376,22 +458,30 @@ export default async function ProductPage({
               {relatedProducts.map(
                 (relatedProduct) => (
                   <ProductCard
-                    key={relatedProduct.id}
+                    key={
+                      relatedProduct.id
+                    }
                     product={{
-                      name: relatedProduct.name,
-                      slug: relatedProduct.slug,
+                      name:
+                        relatedProduct.name,
+                      slug:
+                        relatedProduct.slug,
                       shortDescription:
                         relatedProduct.shortDescription,
                       material:
                         relatedProduct.material,
                       priceLabel:
                         relatedProduct.priceLabel,
-                      image: relatedProduct.image,
+                      image:
+                        relatedProduct.image,
+
                       category: {
                         name:
-                          relatedProduct.category.name,
+                          relatedProduct
+                            .category.name,
                         slug:
-                          relatedProduct.category.slug,
+                          relatedProduct
+                            .category.slug,
                       },
                     }}
                   />
@@ -402,10 +492,6 @@ export default async function ProductPage({
         </section>
       ) : null}
 
-      {/*
-       * Bara sticky apare numai pentru produse
-       * care se pot cumpăra online.
-       */}
       {canAddToCart &&
       numericPrice !== null ? (
         <MobileProductPurchaseBar
@@ -414,7 +500,8 @@ export default async function ProductPage({
             name: product.name,
             slug: product.slug,
             price: numericPrice,
-            image: product.image,
+            image:
+              primaryProductImage,
             stock: numericStock,
           }}
         />
