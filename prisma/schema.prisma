@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+  eyebrow     String?
+  description String
+  position    Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@index([isActive])
+  @@index([position])
+}
+
+model Product {
+  id               Int                    @id @default(autoincrement())
+  name             String
+  slug             String                 @unique
+  shortDescription String
+  description      String
+  material         String
+  price            Decimal?
+  priceLabel       String?
+  image            String?
+  featured         Boolean                @default(false)
+  stock            Int?
+  canBePurchased   Boolean                @default(false)
+  isActive         Boolean                @default(true)
+  position         Int                    @default(0)
+  categoryId       Int
+  category         Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  specifications   ProductSpecification[]
+  contactMessages  ContactMessage[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([categoryId])
+  @@index([featured])
+  @@index([isActive])
+  @@index([position])
+}
+
+model ProductSpecification {
+  id        Int      @id @default(autoincrement())
+  label     String
+  value     String
+  position  Int      @default(0)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([position])
+}
+
+model ContactMessage {
+  id        Int                  @id @default(autoincrement())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    ContactMessageStatus @default(NEW)
+  productId Int?
+  product   Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([status])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Order {
+  id          Int    @id @default(autoincrement())
+  orderNumber String @unique
+
+  customerName String
+  email        String
+  phone        String
+
+  company   String?
+  vatNumber String?
+
+  county     String
+  city       String
+  address    String
+  postalCode String?
+
+  notes String?
+
+  subtotal     Decimal
+  shippingCost Decimal @default(0)
+  total        Decimal @default(0)
+
+  paymentMethod PaymentMethod @default(CASH_ON_DELIVERY)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  status OrderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items OrderItem[]
+
+  @@index([orderNumber])
+  @@index([status])
+  @@index([paymentMethod])
+  @@index([paymentStatus])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId   Int
+  productName String
+  productSlug String
+  price       Decimal
+  quantity    Int
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ContactMessageStatus {
+  NEW
+  READ
+  ANSWERED
+  ARCHIVED
+}
