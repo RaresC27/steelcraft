@@ -1,5 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import {
+  ArrowUpRight,
+  ImageIcon,
+} from "lucide-react";
 
 type ProductCardProps = {
   product: {
@@ -20,55 +24,75 @@ export function ProductCard({
   product,
 }: ProductCardProps) {
   return (
-    <article className="overflow-hidden rounded-sm border border-neutral-200 bg-white">
+    <article className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:rounded-sm">
       <Link
         href={`/produse/${product.slug}`}
-
-        className="group block"
+        className="grid min-h-[158px] grid-cols-[118px_minmax(0,1fr)] sm:block"
       >
-        <div className="relative aspect-[4/3] overflow-hidden bg-neutral-200">
+        <div className="relative overflow-hidden bg-neutral-100 sm:aspect-[4/3]">
           {product.image ? (
             <Image
               src={product.image}
               alt={product.name}
               fill
-              className="object-cover transition duration-300 group-hover:scale-105"
-              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 639px) 118px, (min-width: 1024px) 33vw, 50vw"
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-              Imagine indisponibilă
+            <div className="flex h-full min-h-[158px] flex-col items-center justify-center gap-2 text-neutral-400 sm:min-h-0">
+              <ImageIcon className="size-6" />
+
+              <span className="hidden text-xs sm:block">
+                Imagine indisponibilă
+              </span>
             </div>
           )}
+
+          <span className="absolute left-2 top-2 max-w-[102px] truncate rounded-full bg-black/75 px-2.5 py-1 font-condensed text-[9px] font-bold uppercase tracking-[0.06em] text-white backdrop-blur-md sm:hidden">
+            {product.category.name}
+          </span>
         </div>
 
-        <div className="p-5">
-          <p className="font-condensed text-xs font-bold uppercase tracking-[0.14em] text-primary">
+        <div className="flex min-w-0 flex-col p-3.5 sm:p-5">
+          <p className="font-condensed hidden text-xs font-bold uppercase tracking-[0.14em] text-primary sm:block">
             {product.category.name}
           </p>
 
-          <h2 className="font-display mt-2 text-3xl uppercase leading-none text-[#111111]">
-            {product.name}
-          </h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="font-display line-clamp-2 text-[22px] uppercase leading-[0.98] text-[#111111] sm:mt-2 sm:text-3xl">
+              {product.name}
+            </h2>
 
-          <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-600">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[#111111] transition-all duration-200 group-active:scale-90 sm:hidden">
+              <ArrowUpRight className="size-4" />
+            </span>
+          </div>
+
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-600 sm:mt-3 sm:line-clamp-3 sm:text-sm sm:leading-6">
             {product.shortDescription}
           </p>
 
-          <div className="mt-5 flex items-end justify-between gap-4 border-t border-neutral-200 pt-4">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-neutral-500">
-                Material
-              </p>
-
-              <p className="mt-1 text-sm font-semibold text-[#111111]">
-                {product.material}
-              </p>
-            </div>
-
-            <p className="text-right text-sm font-bold text-primary">
-              {product.priceLabel ?? "Preț la cerere"}
+          <div className="mt-auto pt-3">
+            <p className="font-condensed text-base font-bold leading-none text-primary sm:text-right sm:text-sm">
+              {product.priceLabel ??
+                "Preț la cerere"}
             </p>
+
+            <div className="mt-3 flex items-end justify-between border-t border-neutral-200 pt-2.5 sm:mt-5 sm:pt-4">
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-wide text-neutral-400 sm:text-xs">
+                  Material
+                </p>
+
+                <p className="mt-0.5 truncate text-[11px] font-semibold text-[#111111] sm:mt-1 sm:text-sm">
+                  {product.material}
+                </p>
+              </div>
+
+              <span className="font-condensed hidden text-xs font-bold uppercase tracking-[0.08em] text-primary sm:inline">
+                Vezi produsul →
+              </span>
+            </div>
           </div>
         </div>
       </Link>

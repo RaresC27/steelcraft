@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { MobileHeader } from "@/components/layout/mobile-header";
+import { MobileCartToast } from "@/components/cart/mobile-cart-toast";
 
 import "./globals.css";
 
@@ -62,6 +63,7 @@ export default function RootLayout({
 
         <SiteFooter />
 
+        <MobileCartToast />
         <MobileBottomNav />
       </body>
     </html>
