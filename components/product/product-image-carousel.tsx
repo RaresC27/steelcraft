@@ -30,10 +30,37 @@ export function ProductImageCarousel({
     useEmblaCarousel({
       loop: images.length > 1,
       align: "start",
+      skipSnaps: false,
+      dragFree: false,
     });
 
   const [selectedIndex, setSelectedIndex] =
     useState(0);
+
+  const [canScrollPrev, setCanScrollPrev] =
+    useState(false);
+
+  const [canScrollNext, setCanScrollNext] =
+    useState(false);
+
+  const updateCarouselState =
+    useCallback(() => {
+      if (!emblaApi) {
+        return;
+      }
+
+      setSelectedIndex(
+        emblaApi.selectedScrollSnap(),
+      );
+
+      setCanScrollPrev(
+        emblaApi.canScrollPrev(),
+      );
+
+      setCanScrollNext(
+        emblaApi.canScrollNext(),
+      );
+    }, [emblaApi]);
 
   const scrollPrev = useCallback(() => {
     emblaApi?.scrollPrev();
@@ -55,26 +82,37 @@ export function ProductImageCarousel({
       return;
     }
 
-    const handleSelect = () => {
-      setSelectedIndex(
-        emblaApi.selectedScrollSnap(),
-      );
-    };
+    updateCarouselState();
 
-    handleSelect();
+    emblaApi.on(
+      "select",
+      updateCarouselState,
+    );
 
-    emblaApi.on("select", handleSelect);
-    emblaApi.on("reInit", handleSelect);
+    emblaApi.on(
+      "reInit",
+      updateCarouselState,
+    );
 
     return () => {
-      emblaApi.off("select", handleSelect);
-      emblaApi.off("reInit", handleSelect);
+      emblaApi.off(
+        "select",
+        updateCarouselState,
+      );
+
+      emblaApi.off(
+        "reInit",
+        updateCarouselState,
+      );
     };
-  }, [emblaApi]);
+  }, [
+    emblaApi,
+    updateCarouselState,
+  ]);
 
   if (images.length === 0) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-neutral-200 sm:rounded-sm">
+      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-neutral-200 sm:rounded-sm">
         <div className="text-center text-neutral-500">
           <ImageIcon className="mx-auto size-7" />
 
@@ -87,38 +125,58 @@ export function ProductImageCarousel({
   }
 
   return (
-    <div>
-      <div className="relative overflow-hidden rounded-2xl bg-neutral-200 shadow-sm sm:rounded-sm">
+    <div className="min-w-0">
+      <div className="relative -mx-3 overflow-hidden bg-neutral-100 sm:mx-0 sm:rounded-sm">
         <div
           ref={emblaRef}
           className="overflow-hidden"
         >
           <div className="flex touch-pan-y">
-            {images.map((image, index) => (
-              <div
-                key={image.id}
-                className="relative aspect-[4/3] min-w-0 flex-[0_0_100%]"
-              >
-                <Image
-                  src={image.url}
-                  alt={image.alt}
-                  fill
-                  priority={index === 0}
-                  className="object-cover"
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                />
-              </div>
-            ))}
+            {images.map(
+              (image, index) => (
+                <div
+                  key={image.id}
+                  className="relative aspect-[4/3] min-w-0 flex-[0_0_100%] bg-neutral-100 sm:aspect-[5/4] lg:aspect-[4/3]"
+                >
+                  <Image
+                    src={image.url}
+                    alt={image.alt}
+                    fill
+                    priority={index === 0}
+                    className="select-none object-cover"
+                    sizes="(max-width: 639px) 100vw, (min-width: 1024px) 50vw, 100vw"
+                    draggable={false}
+                  />
+                </div>
+              ),
+            )}
           </div>
         </div>
 
         {images.length > 1 ? (
           <>
+            <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/70 px-2.5 py-1 font-condensed text-[11px] font-bold text-white backdrop-blur-md sm:bottom-4 sm:right-4 sm:px-3 sm:py-1.5 sm:text-xs">
+              {selectedIndex + 1}
+              <span className="mx-1 text-white/50">
+                /
+              </span>
+              {images.length}
+            </span>
+
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent sm:hidden"
+            />
+
             <button
               type="button"
               onClick={scrollPrev}
+              disabled={
+                !canScrollPrev &&
+                images.length <= 1
+              }
               aria-label="Imaginea anterioară"
-              className="absolute left-3 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur transition hover:bg-primary sm:flex"
+              className="absolute left-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
             >
               <ChevronLeft className="size-5" />
             </button>
@@ -126,43 +184,85 @@ export function ProductImageCarousel({
             <button
               type="button"
               onClick={scrollNext}
+              disabled={
+                !canScrollNext &&
+                images.length <= 1
+              }
               aria-label="Imaginea următoare"
-              className="absolute right-3 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur transition hover:bg-primary sm:flex"
+              className="absolute right-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
             >
               <ChevronRight className="size-5" />
             </button>
-
-            <span className="absolute bottom-3 right-3 rounded-full bg-black/65 px-3 py-1.5 font-condensed text-xs font-bold text-white backdrop-blur">
-              {selectedIndex + 1}/{images.length}
-            </span>
           </>
         ) : null}
       </div>
 
       {images.length > 1 ? (
-        <div className="mobile-scrollbar-hidden mt-3 flex gap-2 overflow-x-auto pb-1">
-          {images.map((image, index) => (
-            <button
-              key={image.id}
-              type="button"
-              onClick={() => scrollTo(index)}
-              aria-label={`Deschide imaginea ${index + 1}`}
-              className={[
-                "relative aspect-square w-16 shrink-0 overflow-hidden rounded-xl border-2 transition active:scale-95 sm:w-20 sm:rounded-sm",
-                selectedIndex === index
-                  ? "border-primary"
-                  : "border-transparent opacity-60 hover:opacity-100",
-              ].join(" ")}
-            >
-              <Image
-                src={image.url}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="80px"
+        <div className="mobile-scrollbar-hidden -mx-3 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+          {images.map(
+            (image, index) => {
+              const isActive =
+                selectedIndex === index;
+
+              return (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() =>
+                    scrollTo(index)
+                  }
+                  aria-label={`Deschide imaginea ${index + 1}`}
+                  aria-current={
+                    isActive
+                      ? "true"
+                      : undefined
+                  }
+                  className={[
+                    "relative aspect-square w-14 shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-neutral-100 transition active:scale-95 sm:w-20 sm:rounded-sm",
+                    isActive
+                      ? "border-primary opacity-100"
+                      : "border-transparent opacity-55 hover:opacity-100",
+                  ].join(" ")}
+                >
+                  <Image
+                    src={image.url}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="80px"
+                    draggable={false}
+                  />
+
+                  {isActive ? (
+                    <span className="absolute inset-x-1 bottom-1 h-0.5 rounded-full bg-primary sm:hidden" />
+                  ) : null}
+                </button>
+              );
+            },
+          )}
+        </div>
+      ) : null}
+
+      {images.length > 1 ? (
+        <div className="mt-3 flex justify-center gap-1.5 sm:hidden">
+          {images.map(
+            (image, index) => (
+              <button
+                key={image.id}
+                type="button"
+                onClick={() =>
+                  scrollTo(index)
+                }
+                aria-label={`Mergi la imaginea ${index + 1}`}
+                className={[
+                  "h-1.5 rounded-full transition-all duration-300",
+                  selectedIndex === index
+                    ? "w-7 bg-primary"
+                    : "w-1.5 bg-neutral-300",
+                ].join(" ")}
               />
-            </button>
-          ))}
+            ),
+          )}
         </div>
       ) : null}
     </div>
