@@ -18,6 +18,9 @@ import { useRouter } from "next/navigation";
 import {
   type FormEvent,
   type ReactNode,
+  memo,
+  useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -35,9 +38,7 @@ import {
 } from "@/lib/romania-locations";
 import { checkoutSchema } from "@/lib/validation/checkout";
 
-type PaymentMethod =
-  | "CASH_ON_DELIVERY"
-  | "CARD";
+type PaymentMethod = "CASH_ON_DELIVERY" | "CARD";
 
 type CheckoutFormData = {
   customerName: string;
@@ -53,20 +54,14 @@ type CheckoutFormData = {
   paymentMethod: PaymentMethod;
 };
 
-type CheckoutFieldName =
-  keyof CheckoutFormData;
+type CheckoutFieldName = keyof CheckoutFormData;
 
-type CheckoutFieldErrors = Partial<
-  Record<CheckoutFieldName, string>
->;
+type CheckoutFieldErrors = Partial<Record<CheckoutFieldName, string>>;
 
 type CreateOrderResponse = {
   message?: string;
   error?: string;
-  fieldErrors?: Record<
-    string,
-    string[] | undefined
-  >;
+  fieldErrors?: Record<string, string[] | undefined>;
   order?: {
     id: number;
     orderNumber: string;
@@ -80,9 +75,9 @@ type CreateOrderResponse = {
   };
 };
 
-type LocationPickerType =
-  | "county"
-  | "city";
+type LocationPickerType = "county" | "city";
+
+type CartItems = ReturnType<typeof useCartStore.getState>["items"];
 
 const initialFormData: CheckoutFormData = {
   customerName: "",
@@ -98,53 +93,50 @@ const initialFormData: CheckoutFormData = {
   paymentMethod: "CASH_ON_DELIVERY",
 };
 
-const inputClassName =
+const inputBaseClassName =
   "h-12 w-full rounded-xl border bg-white px-4 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 sm:rounded-sm";
 
-const textareaClassName =
+const textareaBaseClassName =
   "min-h-28 w-full resize-y rounded-xl border bg-white px-4 py-3 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 sm:min-h-32 sm:rounded-sm";
 
+const idleBorderClassName =
+  "border-neutral-300 focus:border-primary focus:ring-primary/15";
+
+const errorBorderClassName =
+  "border-red-500 focus:border-red-500 focus:ring-red-500/15";
+
+// Class strings are built once instead of on every render.
+const inputClassNameIdle = [inputBaseClassName, idleBorderClassName].join(" ");
+const inputClassNameError = [inputBaseClassName, errorBorderClassName].join(" ");
+const textareaClassNameIdle = [textareaBaseClassName, idleBorderClassName].join(" ");
+const textareaClassNameError = [textareaBaseClassName, errorBorderClassName].join(" ");
+
+function getInputClassName(hasError: boolean) {
+  return hasError ? inputClassNameError : inputClassNameIdle;
+}
+
+function getTextareaClassName(hasError: boolean) {
+  return hasError ? textareaClassNameError : textareaClassNameIdle;
+}
+
+// A single shared formatter instead of constructing a new Intl.NumberFormat
+// on every formatPrice() call (this fires many times per render).
+const priceFormatter = new Intl.NumberFormat("ro-RO", {
+  style: "currency",
+  currency: "RON",
+  minimumFractionDigits: 2,
+});
+
 function formatPrice(value: number) {
-  return new Intl.NumberFormat("ro-RO", {
-    style: "currency",
-    currency: "RON",
-    minimumFractionDigits: 2,
-  }).format(value);
-}
-
-function getInputClassName(
-  hasError: boolean,
-) {
-  return [
-    inputClassName,
-    hasError
-      ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
-      : "border-neutral-300 focus:border-primary focus:ring-primary/15",
-  ].join(" ");
-}
-
-function getTextareaClassName(
-  hasError: boolean,
-) {
-  return [
-    textareaClassName,
-    hasError
-      ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
-      : "border-neutral-300 focus:border-primary focus:ring-primary/15",
-  ].join(" ");
+  return priceFormatter.format(value);
 }
 
 function normalizeFieldErrors(
-  source: Record<
-    string,
-    string[] | undefined
-  >,
+  source: Record<string, string[] | undefined>,
 ) {
   const errors: CheckoutFieldErrors = {};
 
-  for (const [field, messages] of Object.entries(
-    source,
-  )) {
+  for (const [field, messages] of Object.entries(source)) {
     const firstMessage = messages?.[0];
 
     if (!firstMessage) {
@@ -152,18 +144,14 @@ function normalizeFieldErrors(
     }
 
     if (field in initialFormData) {
-      errors[
-        field as CheckoutFieldName
-      ] = firstMessage;
+      errors[field as CheckoutFieldName] = firstMessage;
     }
   }
 
   return errors;
 }
 
-function normalizeSearchValue(
-  value: string,
-) {
+function normalizeSearchValue(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -171,54 +159,82 @@ function normalizeSearchValue(
     .trim();
 }
 
+type NormalizedOption = {
+  label: string;
+  normalized: string;
+};
+
+function toNormalizedOptions(labels: string[]): NormalizedOption[] {
+  return labels.map((label) => ({
+    label,
+    normalized: normalizeSearchValue(label),
+  }));
+}
+
+// County list never changes, so it's normalized exactly once at module load
+// instead of on every keystroke inside the picker.
+const normalizedCounties = toNormalizedOptions(
+  romaniaCounties.map((county) => county.name),
+);
+
+/**
+ * Tracks the actual visible viewport height via the VisualViewport API.
+ * This is the only reliable cross-browser way to know how much space is
+ * left once the on-screen keyboard opens (svh/dvh alone are not enough on
+ * iOS/Android when the keyboard appears), so the location picker can keep
+ * its results list fully visible above the keyboard instead of pushing it
+ * out of view.
+ */
+function useVisualViewportHeight() {
+  const [height, setHeight] = useState<number | null>(() =>
+    typeof window !== "undefined" && window.visualViewport
+      ? window.visualViewport.height
+      : null,
+  );
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+
+    if (!viewport) {
+      return;
+    }
+
+    function updateHeight() {
+      setHeight(viewport!.height);
+    }
+
+    updateHeight();
+
+    viewport.addEventListener("resize", updateHeight);
+
+    return () => {
+      viewport.removeEventListener("resize", updateHeight);
+    };
+  }, []);
+
+  return height;
+}
+
 export function CheckoutForm() {
   const router = useRouter();
 
-  const formRef =
-    useRef<HTMLFormElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitLockRef = useRef(false);
 
-  const submitLockRef =
-    useRef(false);
+  const items = useCartStore((state) => state.items);
+  const clearCart = useCartStore((state) => state.clearCart);
 
-  const items = useCartStore(
-    (state) => state.items,
-  );
+  const [formData, setFormData] = useState<CheckoutFormData>(initialFormData);
+  const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
+  const [isMounted, setIsMounted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const clearCart = useCartStore(
-    (state) => state.clearCart,
-  );
+  const [activeLocationPicker, setActiveLocationPicker] =
+    useState<LocationPickerType | null>(null);
+  const [locationSearch, setLocationSearch] = useState("");
 
-  const [formData, setFormData] =
-    useState<CheckoutFormData>(
-      initialFormData,
-    );
-
-  const [fieldErrors, setFieldErrors] =
-    useState<CheckoutFieldErrors>({});
-
-  const [isMounted, setIsMounted] =
-    useState(false);
-
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [
-    activeLocationPicker,
-    setActiveLocationPicker,
-  ] = useState<LocationPickerType | null>(
-    null,
-  );
-
-  const [locationSearch, setLocationSearch] =
-    useState("");
-
-  const [
-    isMobileSummaryOpen,
-    setIsMobileSummaryOpen,
-  ] = useState(false);
+  const [isMobileSummaryOpen, setIsMobileSummaryOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -229,357 +245,251 @@ export function CheckoutForm() {
       return;
     }
 
-    const previousOverflow =
-      document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-    document.body.style.overflow =
-      "hidden";
-
-    function handleKeyDown(
-      event: KeyboardEvent,
-    ) {
+    function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeLocationPicker();
       }
     }
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow =
-        previousOverflow;
-
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationPicker]);
 
   const subtotal = useMemo(() => {
     return items.reduce(
-      (total, item) =>
-        total +
-        Number(item.price) *
-          item.quantity,
+      (total, item) => total + Number(item.price) * item.quantity,
       0,
     );
   }, [items]);
 
-  const shippingCost = useMemo(
-    () =>
-      calculateShippingCost(subtotal),
-    [subtotal],
-  );
-
-  const total =
-    subtotal + shippingCost;
+  const shippingCost = useMemo(() => calculateShippingCost(subtotal), [subtotal]);
+  const total = subtotal + shippingCost;
 
   const availableCities = useMemo(
-    () =>
-      formData.county
-        ? getCitiesByCounty(
-            formData.county,
-          )
-        : [],
+    () => (formData.county ? getCitiesByCounty(formData.county) : []),
     [formData.county],
   );
 
+  // Cities are re-normalized only when the county (and thus the city list)
+  // actually changes, not on every keystroke in the search box.
+  const normalizedCities = useMemo(
+    () => toNormalizedOptions(availableCities),
+    [availableCities],
+  );
+
+  // useDeferredValue keeps typing snappy even for counties with long city
+  // lists, by letting the filtered result lag a frame behind the input.
+  const deferredLocationSearch = useDeferredValue(locationSearch);
+
   const pickerOptions = useMemo(() => {
     const source =
-      activeLocationPicker === "county"
-        ? romaniaCounties.map(
-            (county) => county.name,
-          )
-        : availableCities;
+      activeLocationPicker === "county" ? normalizedCounties : normalizedCities;
 
-    const normalizedSearch =
-      normalizeSearchValue(
-        locationSearch,
-      );
+    const normalizedSearch = normalizeSearchValue(deferredLocationSearch);
 
     if (!normalizedSearch) {
-      return source;
+      return source.map((option) => option.label);
     }
 
-    return source.filter((option) =>
-      normalizeSearchValue(
-        option,
-      ).includes(normalizedSearch),
-    );
-  }, [
-    activeLocationPicker,
-    availableCities,
-    locationSearch,
-  ]);
+    return source
+      .filter((option) => option.normalized.includes(normalizedSearch))
+      .map((option) => option.label);
+  }, [activeLocationPicker, normalizedCities, deferredLocationSearch]);
 
-  function updateField(
-    field: CheckoutFieldName,
-    value: string,
-  ) {
-    setFormData((currentData) => ({
-      ...currentData,
-      [field]: value,
-    }));
+  const updateField = useCallback(
+    (field: CheckoutFieldName, value: string) => {
+      setFormData((currentData) => ({
+        ...currentData,
+        [field]: value,
+      }));
 
-    setFieldErrors(
-      (currentErrors) => {
+      setFieldErrors((currentErrors) => {
         if (!currentErrors[field]) {
           return currentErrors;
         }
 
-        const nextErrors = {
-          ...currentErrors,
-        };
-
+        const nextErrors = { ...currentErrors };
         delete nextErrors[field];
-
         return nextErrors;
-      },
-    );
+      });
 
-    if (error) {
-      setError("");
-    }
-  }
+      setError((currentError) => (currentError ? "" : currentError));
+    },
+    [],
+  );
 
-  function openLocationPicker(
-    type: LocationPickerType,
-  ) {
-    if (
-      type === "city" &&
-      !formData.county
-    ) {
-      setFieldErrors(
-        (currentErrors) => ({
+  const openLocationPicker = useCallback(
+    (type: LocationPickerType) => {
+      if (type === "city" && !formData.county) {
+        setFieldErrors((currentErrors) => ({
           ...currentErrors,
-          county:
-            "Selectează mai întâi județul.",
-        }),
-      );
+          county: "Selectează mai întâi județul.",
+        }));
 
-      return;
-    }
+        return;
+      }
 
-    setLocationSearch("");
-    setActiveLocationPicker(type);
-  }
+      setLocationSearch("");
+      setActiveLocationPicker(type);
+    },
+    [formData.county],
+  );
 
-  function closeLocationPicker() {
+  const closeLocationPicker = useCallback(() => {
     setActiveLocationPicker(null);
     setLocationSearch("");
-  }
+  }, []);
 
-  function selectLocation(
-    value: string,
-  ) {
-    if (
-      activeLocationPicker ===
-      "county"
-    ) {
-      updateField("county", value);
-      updateField("city", "");
-    }
+  const selectLocation = useCallback(
+    (value: string) => {
+      if (activeLocationPicker === "county") {
+        updateField("county", value);
+        updateField("city", "");
+      }
 
-    if (
-      activeLocationPicker === "city"
-    ) {
-      updateField("city", value);
-    }
+      if (activeLocationPicker === "city") {
+        updateField("city", value);
+      }
 
-    closeLocationPicker();
-  }
+      closeLocationPicker();
+    },
+    [activeLocationPicker, updateField, closeLocationPicker],
+  );
 
-  function focusFirstInvalidField(
-    errors: CheckoutFieldErrors,
-  ) {
-    const firstInvalidField =
-      Object.keys(
-        errors,
-      )[0] as
+  const focusFirstInvalidField = useCallback(
+    (errors: CheckoutFieldErrors) => {
+      const firstInvalidField = Object.keys(errors)[0] as
         | CheckoutFieldName
         | undefined;
 
-    if (!firstInvalidField) {
-      return;
-    }
+      if (!firstInvalidField) {
+        return;
+      }
 
-    window.requestAnimationFrame(
-      () => {
-        const fieldElement =
-          formRef.current?.querySelector<
-            HTMLElement
-          >(
-            `[data-checkout-field="${firstInvalidField}"]`,
-          );
+      window.requestAnimationFrame(() => {
+        const fieldElement = formRef.current?.querySelector<HTMLElement>(
+          `[data-checkout-field="${firstInvalidField}"]`,
+        );
 
         if (fieldElement) {
-          fieldElement.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-
+          fieldElement.scrollIntoView({ behavior: "smooth", block: "center" });
           fieldElement.focus();
-
           return;
         }
 
-        const element =
-          formRef.current?.elements.namedItem(
-            firstInvalidField,
-          );
+        const element = formRef.current?.elements.namedItem(firstInvalidField);
 
         if (
-          element instanceof
-            HTMLInputElement ||
-          element instanceof
-            HTMLTextAreaElement ||
-          element instanceof
-            HTMLSelectElement
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLTextAreaElement ||
+          element instanceof HTMLSelectElement
         ) {
-          element.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
           element.focus();
         }
-      },
-    );
-  }
+      });
+    },
+    [],
+  );
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
+  const handleSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
 
-    if (
-      isSubmitting ||
-      submitLockRef.current
-    ) {
-      return;
-    }
+      if (isSubmitting || submitLockRef.current) {
+        return;
+      }
 
-    if (items.length === 0) {
-      setError(
-        "Coșul de cumpărături este gol.",
-      );
+      if (items.length === 0) {
+        setError("Coșul de cumpărături este gol.");
+        return;
+      }
 
-      return;
-    }
+      const requestBody = {
+        ...formData,
+        items: items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+      };
 
-    const requestBody = {
-      ...formData,
-      items: items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-      })),
-    };
+      const clientValidation = checkoutSchema.safeParse(requestBody);
 
-    const clientValidation =
-      checkoutSchema.safeParse(
-        requestBody,
-      );
-
-    if (!clientValidation.success) {
-      const errors =
-        normalizeFieldErrors(
-          clientValidation.error.flatten()
-            .fieldErrors,
+      if (!clientValidation.success) {
+        const errors = normalizeFieldErrors(
+          clientValidation.error.flatten().fieldErrors,
         );
 
-      setFieldErrors(errors);
+        setFieldErrors(errors);
+        setError("Verifică informațiile marcate în formular.");
+        focusFirstInvalidField(errors);
+        return;
+      }
 
-      setError(
-        "Verifică informațiile marcate în formular.",
-      );
+      setError("");
+      setFieldErrors({});
+      setIsSubmitting(true);
+      submitLockRef.current = true;
 
-      focusFirstInvalidField(errors);
-
-      return;
-    }
-
-    setError("");
-    setFieldErrors({});
-    setIsSubmitting(true);
-    submitLockRef.current = true;
-
-    try {
-      const response = await fetch(
-        "/api/orders",
-        {
+      try {
+        const response = await fetch("/api/orders", {
           method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify(
-            clientValidation.data,
-          ),
-        },
-      );
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(clientValidation.data),
+        });
 
-      const data =
-        (await response.json()) as CreateOrderResponse;
+        const data = (await response.json()) as CreateOrderResponse;
 
-      if (!response.ok) {
-        if (data.fieldErrors) {
-          const errors =
-            normalizeFieldErrors(
-              data.fieldErrors,
-            );
+        if (!response.ok) {
+          if (data.fieldErrors) {
+            const errors = normalizeFieldErrors(data.fieldErrors);
+            setFieldErrors(errors);
+            focusFirstInvalidField(errors);
+          }
 
-          setFieldErrors(errors);
-
-          focusFirstInvalidField(
-            errors,
-          );
+          throw new Error(data.error ?? "Comanda nu a putut fi trimisă.");
         }
 
-        throw new Error(
-          data.error ??
-            "Comanda nu a putut fi trimisă.",
+        if (!data.order) {
+          throw new Error("Serverul nu a returnat informațiile comenzii.");
+        }
+
+        clearCart();
+
+        router.push(
+          `/comanda-finalizata?orderNumber=${encodeURIComponent(
+            data.order.orderNumber,
+          )}`,
         );
-      }
-
-      if (!data.order) {
-        throw new Error(
-          "Serverul nu a returnat informațiile comenzii.",
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "A apărut o eroare neașteptată.",
         );
+
+        submitLockRef.current = false;
+      } finally {
+        setIsSubmitting(false);
       }
-
-      clearCart();
-
-      router.push(
-        `/comanda-finalizata?orderNumber=${encodeURIComponent(
-          data.order.orderNumber,
-        )}`,
-      );
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "A apărut o eroare neașteptată.",
-      );
-
-      submitLockRef.current = false;
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
+    },
+    [isSubmitting, items, formData, clearCart, router, focusFirstInvalidField],
+  );
 
   if (!isMounted) {
     return (
       <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:rounded-sm sm:p-8">
         <div className="flex items-center gap-3">
           <LoaderCircle className="size-5 animate-spin text-primary" />
-
-          <p className="text-sm text-neutral-600">
-            Se încarcă datele coșului...
-          </p>
+          <p className="text-sm text-neutral-600">Se încarcă datele coșului...</p>
         </div>
       </div>
     );
@@ -597,8 +507,7 @@ export function CheckoutForm() {
         </h2>
 
         <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-neutral-600">
-          Adaugă cel puțin un produs în coș
-          înainte de a continua către
+          Adaugă cel puțin un produs în coș înainte de a continua către
           finalizarea comenzii.
         </p>
 
@@ -632,9 +541,7 @@ export function CheckoutForm() {
                 id="customerName"
                 label="Nume complet"
                 required
-                error={
-                  fieldErrors.customerName
-                }
+                error={fieldErrors.customerName}
               >
                 <input
                   id="customerName"
@@ -642,37 +549,19 @@ export function CheckoutForm() {
                   type="text"
                   autoComplete="name"
                   disabled={isSubmitting}
-                  value={
-                    formData.customerName
-                  }
+                  value={formData.customerName}
                   onChange={(event) =>
-                    updateField(
-                      "customerName",
-                      event.target.value,
-                    )
+                    updateField("customerName", event.target.value)
                   }
-                  aria-invalid={Boolean(
-                    fieldErrors.customerName,
-                  )}
+                  aria-invalid={Boolean(fieldErrors.customerName)}
                   aria-describedby={
-                    fieldErrors.customerName
-                      ? "customerName-error"
-                      : undefined
+                    fieldErrors.customerName ? "customerName-error" : undefined
                   }
-                  className={getInputClassName(
-                    Boolean(
-                      fieldErrors.customerName,
-                    ),
-                  )}
+                  className={getInputClassName(Boolean(fieldErrors.customerName))}
                 />
               </FormField>
 
-              <FormField
-                id="phone"
-                label="Telefon"
-                required
-                error={fieldErrors.phone}
-              >
+              <FormField id="phone" label="Telefon" required error={fieldErrors.phone}>
                 <input
                   id="phone"
                   name="phone"
@@ -682,37 +571,15 @@ export function CheckoutForm() {
                   disabled={isSubmitting}
                   placeholder="07xx xxx xxx"
                   value={formData.phone}
-                  onChange={(event) =>
-                    updateField(
-                      "phone",
-                      event.target.value,
-                    )
-                  }
-                  aria-invalid={Boolean(
-                    fieldErrors.phone,
-                  )}
-                  aria-describedby={
-                    fieldErrors.phone
-                      ? "phone-error"
-                      : undefined
-                  }
-                  className={getInputClassName(
-                    Boolean(
-                      fieldErrors.phone,
-                    ),
-                  )}
+                  onChange={(event) => updateField("phone", event.target.value)}
+                  aria-invalid={Boolean(fieldErrors.phone)}
+                  aria-describedby={fieldErrors.phone ? "phone-error" : undefined}
+                  className={getInputClassName(Boolean(fieldErrors.phone))}
                 />
               </FormField>
 
               <div className="sm:col-span-2">
-                <FormField
-                  id="email"
-                  label="Email"
-                  required
-                  error={
-                    fieldErrors.email
-                  }
-                >
+                <FormField id="email" label="Email" required error={fieldErrors.email}>
                   <input
                     id="email"
                     name="email"
@@ -722,25 +589,10 @@ export function CheckoutForm() {
                     disabled={isSubmitting}
                     placeholder="nume@exemplu.ro"
                     value={formData.email}
-                    onChange={(event) =>
-                      updateField(
-                        "email",
-                        event.target.value,
-                      )
-                    }
-                    aria-invalid={Boolean(
-                      fieldErrors.email,
-                    )}
-                    aria-describedby={
-                      fieldErrors.email
-                        ? "email-error"
-                        : undefined
-                    }
-                    className={getInputClassName(
-                      Boolean(
-                        fieldErrors.email,
-                      ),
-                    )}
+                    onChange={(event) => updateField("email", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.email)}
+                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
+                    className={getInputClassName(Boolean(fieldErrors.email))}
                   />
                 </FormField>
               </div>
@@ -764,13 +616,7 @@ export function CheckoutForm() {
 
             <div className="border-t border-neutral-200 px-4 pb-5 pt-4 sm:px-7 sm:pb-7">
               <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-                <FormField
-                  id="company"
-                  label="Denumire firmă"
-                  error={
-                    fieldErrors.company
-                  }
-                >
+                <FormField id="company" label="Denumire firmă" error={fieldErrors.company}>
                   <input
                     id="company"
                     name="company"
@@ -778,35 +624,14 @@ export function CheckoutForm() {
                     autoComplete="organization"
                     disabled={isSubmitting}
                     value={formData.company}
-                    onChange={(event) =>
-                      updateField(
-                        "company",
-                        event.target.value,
-                      )
-                    }
-                    aria-invalid={Boolean(
-                      fieldErrors.company,
-                    )}
-                    aria-describedby={
-                      fieldErrors.company
-                        ? "company-error"
-                        : undefined
-                    }
-                    className={getInputClassName(
-                      Boolean(
-                        fieldErrors.company,
-                      ),
-                    )}
+                    onChange={(event) => updateField("company", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.company)}
+                    aria-describedby={fieldErrors.company ? "company-error" : undefined}
+                    className={getInputClassName(Boolean(fieldErrors.company))}
                   />
                 </FormField>
 
-                <FormField
-                  id="vatNumber"
-                  label="CUI / CIF"
-                  error={
-                    fieldErrors.vatNumber
-                  }
-                >
+                <FormField id="vatNumber" label="CUI / CIF" error={fieldErrors.vatNumber}>
                   <input
                     id="vatNumber"
                     name="vatNumber"
@@ -814,28 +639,15 @@ export function CheckoutForm() {
                     autoCapitalize="characters"
                     disabled={isSubmitting}
                     placeholder="RO12345678"
-                    value={
-                      formData.vatNumber
-                    }
+                    value={formData.vatNumber}
                     onChange={(event) =>
-                      updateField(
-                        "vatNumber",
-                        event.target.value.toUpperCase(),
-                      )
+                      updateField("vatNumber", event.target.value.toUpperCase())
                     }
-                    aria-invalid={Boolean(
-                      fieldErrors.vatNumber,
-                    )}
+                    aria-invalid={Boolean(fieldErrors.vatNumber)}
                     aria-describedby={
-                      fieldErrors.vatNumber
-                        ? "vatNumber-error"
-                        : undefined
+                      fieldErrors.vatNumber ? "vatNumber-error" : undefined
                     }
-                    className={getInputClassName(
-                      Boolean(
-                        fieldErrors.vatNumber,
-                      ),
-                    )}
+                    className={getInputClassName(Boolean(fieldErrors.vatNumber))}
                   />
                 </FormField>
               </div>
@@ -856,11 +668,7 @@ export function CheckoutForm() {
                 placeholder="Selectează județul"
                 error={fieldErrors.county}
                 disabled={isSubmitting}
-                onClick={() =>
-                  openLocationPicker(
-                    "county",
-                  )
-                }
+                onOpen={openLocationPicker}
               />
 
               <SearchableLocationField
@@ -869,41 +677,18 @@ export function CheckoutForm() {
                 required
                 value={formData.city}
                 placeholder={
-                  formData.county
-                    ? "Selectează localitatea"
-                    : "Alege mai întâi județul"
+                  formData.county ? "Selectează localitatea" : "Alege mai întâi județul"
                 }
                 error={fieldErrors.city}
-                disabled={
-                  isSubmitting ||
-                  !formData.county
-                }
-                onClick={() =>
-                  openLocationPicker("city")
-                }
+                disabled={isSubmitting || !formData.county}
+                onOpen={openLocationPicker}
               />
 
-              <input
-                type="hidden"
-                name="county"
-                value={formData.county}
-              />
-
-              <input
-                type="hidden"
-                name="city"
-                value={formData.city}
-              />
+              <input type="hidden" name="county" value={formData.county} />
+              <input type="hidden" name="city" value={formData.city} />
 
               <div className="sm:col-span-2">
-                <FormField
-                  id="address"
-                  label="Adresă"
-                  required
-                  error={
-                    fieldErrors.address
-                  }
-                >
+                <FormField id="address" label="Adresă" required error={fieldErrors.address}>
                   <input
                     id="address"
                     name="address"
@@ -912,36 +697,15 @@ export function CheckoutForm() {
                     disabled={isSubmitting}
                     placeholder="Stradă, număr, bloc, scară, apartament"
                     value={formData.address}
-                    onChange={(event) =>
-                      updateField(
-                        "address",
-                        event.target.value,
-                      )
-                    }
-                    aria-invalid={Boolean(
-                      fieldErrors.address,
-                    )}
-                    aria-describedby={
-                      fieldErrors.address
-                        ? "address-error"
-                        : undefined
-                    }
-                    className={getInputClassName(
-                      Boolean(
-                        fieldErrors.address,
-                      ),
-                    )}
+                    onChange={(event) => updateField("address", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.address)}
+                    aria-describedby={fieldErrors.address ? "address-error" : undefined}
+                    className={getInputClassName(Boolean(fieldErrors.address))}
                   />
                 </FormField>
               </div>
 
-              <FormField
-                id="postalCode"
-                label="Cod poștal"
-                error={
-                  fieldErrors.postalCode
-                }
-              >
+              <FormField id="postalCode" label="Cod poștal" error={fieldErrors.postalCode}>
                 <input
                   id="postalCode"
                   name="postalCode"
@@ -951,40 +715,20 @@ export function CheckoutForm() {
                   disabled={isSubmitting}
                   maxLength={6}
                   placeholder="123456"
-                  value={
-                    formData.postalCode
-                  }
+                  value={formData.postalCode}
                   onChange={(event) =>
-                    updateField(
-                      "postalCode",
-                      event.target.value.replace(
-                        /\D/g,
-                        "",
-                      ),
-                    )
+                    updateField("postalCode", event.target.value.replace(/\D/g, ""))
                   }
-                  aria-invalid={Boolean(
-                    fieldErrors.postalCode,
-                  )}
+                  aria-invalid={Boolean(fieldErrors.postalCode)}
                   aria-describedby={
-                    fieldErrors.postalCode
-                      ? "postalCode-error"
-                      : undefined
+                    fieldErrors.postalCode ? "postalCode-error" : undefined
                   }
-                  className={getInputClassName(
-                    Boolean(
-                      fieldErrors.postalCode,
-                    ),
-                  )}
+                  className={getInputClassName(Boolean(fieldErrors.postalCode))}
                 />
               </FormField>
 
               <div className="sm:col-span-2">
-                <FormField
-                  id="notes"
-                  label="Observații"
-                  error={fieldErrors.notes}
-                >
+                <FormField id="notes" label="Observații" error={fieldErrors.notes}>
                   <textarea
                     id="notes"
                     name="notes"
@@ -993,46 +737,26 @@ export function CheckoutForm() {
                     disabled={isSubmitting}
                     placeholder="Detalii despre livrare sau alte observații"
                     value={formData.notes}
-                    onChange={(event) =>
-                      updateField(
-                        "notes",
-                        event.target.value,
-                      )
-                    }
-                    aria-invalid={Boolean(
-                      fieldErrors.notes,
-                    )}
-                    aria-describedby={
-                      fieldErrors.notes
-                        ? "notes-error"
-                        : undefined
-                    }
-                    className={getTextareaClassName(
-                      Boolean(
-                        fieldErrors.notes,
-                      ),
-                    )}
+                    onChange={(event) => updateField("notes", event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.notes)}
+                    aria-describedby={fieldErrors.notes ? "notes-error" : undefined}
+                    className={getTextareaClassName(Boolean(fieldErrors.notes))}
                   />
 
                   <p className="text-right text-xs text-neutral-400">
-                    {formData.notes.length}
-                    /1000
+                    {formData.notes.length}/1000
                   </p>
                 </FormField>
               </div>
             </div>
           </CheckoutSection>
 
-          <CheckoutSection
-            step="03"
-            title="Metoda de plată"
-          >
+          <CheckoutSection step="03" title="Metoda de plată">
             <div className="space-y-3">
               <label
                 className={[
                   "flex min-h-20 cursor-pointer items-start gap-4 rounded-xl border p-4 transition active:scale-[0.99] sm:rounded-sm",
-                  formData.paymentMethod ===
-                  "CASH_ON_DELIVERY"
+                  formData.paymentMethod === "CASH_ON_DELIVERY"
                     ? "border-primary bg-primary/[0.04]"
                     : "border-neutral-200 hover:border-neutral-300",
                 ].join(" ")}
@@ -1042,16 +766,8 @@ export function CheckoutForm() {
                   name="paymentMethod"
                   value="CASH_ON_DELIVERY"
                   disabled={isSubmitting}
-                  checked={
-                    formData.paymentMethod ===
-                    "CASH_ON_DELIVERY"
-                  }
-                  onChange={() =>
-                    updateField(
-                      "paymentMethod",
-                      "CASH_ON_DELIVERY",
-                    )
-                  }
+                  checked={formData.paymentMethod === "CASH_ON_DELIVERY"}
+                  onChange={() => updateField("paymentMethod", "CASH_ON_DELIVERY")}
                   className="mt-1 size-4 accent-primary"
                 />
 
@@ -1061,13 +777,11 @@ export function CheckoutForm() {
                   </span>
 
                   <span className="mt-1 block text-sm leading-6 text-neutral-600">
-                    Plătești când primești
-                    comanda.
+                    Plătești când primești comanda.
                   </span>
                 </span>
 
-                {formData.paymentMethod ===
-                "CASH_ON_DELIVERY" ? (
+                {formData.paymentMethod === "CASH_ON_DELIVERY" ? (
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-white">
                     <Check className="size-4" />
                   </span>
@@ -1075,13 +789,7 @@ export function CheckoutForm() {
               </label>
 
               <div className="flex min-h-20 cursor-not-allowed items-start gap-4 rounded-xl border border-neutral-200 bg-neutral-100 p-4 opacity-60 sm:rounded-sm">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  value="CARD"
-                  disabled
-                  className="mt-1 size-4"
-                />
+                <input type="radio" name="paymentMethod" value="CARD" disabled className="mt-1 size-4" />
 
                 <span>
                   <span className="font-condensed block text-base font-bold uppercase tracking-[0.05em] text-[#111111]">
@@ -1095,34 +803,17 @@ export function CheckoutForm() {
               </div>
 
               {fieldErrors.paymentMethod ? (
-                <p
-                  id="paymentMethod-error"
-                  role="alert"
-                  className="text-sm text-red-600"
-                >
-                  {
-                    fieldErrors.paymentMethod
-                  }
+                <p id="paymentMethod-error" role="alert" className="text-sm text-red-600">
+                  {fieldErrors.paymentMethod}
                 </p>
               ) : null}
             </div>
           </CheckoutSection>
 
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <CheckoutTrustItem
-              icon={ShieldCheck}
-              label="Date protejate"
-            />
-
-            <CheckoutTrustItem
-              icon={PackageCheck}
-              label="Stoc verificat"
-            />
-
-            <CheckoutTrustItem
-              icon={Truck}
-              label="Livrare calculată"
-            />
+            <CheckoutTrustItem icon={ShieldCheck} label="Date protejate" />
+            <CheckoutTrustItem icon={PackageCheck} label="Stoc verificat" />
+            <CheckoutTrustItem icon={Truck} label="Livrare calculată" />
           </div>
         </div>
 
@@ -1140,14 +831,8 @@ export function CheckoutForm() {
         <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm lg:hidden">
           <button
             type="button"
-            onClick={() =>
-              setIsMobileSummaryOpen(
-                (current) => !current,
-              )
-            }
-            aria-expanded={
-              isMobileSummaryOpen
-            }
+            onClick={() => setIsMobileSummaryOpen((current) => !current)}
+            aria-expanded={isMobileSummaryOpen}
             className="flex min-h-16 w-full items-center justify-between gap-4 px-4 text-left"
           >
             <span>
@@ -1156,10 +841,7 @@ export function CheckoutForm() {
               </span>
 
               <span className="mt-1 block font-condensed text-lg font-bold text-[#111111]">
-                {items.length}{" "}
-                {items.length === 1
-                  ? "produs"
-                  : "produse"}
+                {items.length} {items.length === 1 ? "produs" : "produse"}
               </span>
             </span>
 
@@ -1171,9 +853,7 @@ export function CheckoutForm() {
               <ChevronDown
                 className={[
                   "size-5 text-neutral-500 transition",
-                  isMobileSummaryOpen
-                    ? "rotate-180"
-                    : "",
+                  isMobileSummaryOpen ? "rotate-180" : "",
                 ].join(" ")}
               />
             </span>
@@ -1184,17 +864,11 @@ export function CheckoutForm() {
               <OrderSummaryContent
                 items={items}
                 subtotal={subtotal}
-                shippingCost={
-                  shippingCost
-                }
+                shippingCost={shippingCost}
                 total={total}
               />
 
-              {error ? (
-                <ErrorMessage
-                  message={error}
-                />
-              ) : null}
+              {error ? <ErrorMessage message={error} /> : null}
             </div>
           ) : null}
         </section>
@@ -1202,16 +876,10 @@ export function CheckoutForm() {
 
       <div
         className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 px-3 pt-3 shadow-[0_-16px_45px_rgba(0,0,0,0.14)] backdrop-blur-xl lg:hidden"
-        style={{
-          paddingBottom:
-            "max(0.75rem, env(safe-area-inset-bottom))",
-        }}
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         {error ? (
-          <p
-            role="alert"
-            className="mx-auto mb-2 max-w-md truncate text-xs font-medium text-red-600"
-          >
+          <p role="alert" className="mx-auto mb-2 max-w-md truncate text-xs font-medium text-red-600">
             {error}
           </p>
         ) : null}
@@ -1219,9 +887,7 @@ export function CheckoutForm() {
         <div className="mx-auto flex max-w-md items-center gap-3">
           <button
             type="button"
-            onClick={() =>
-              setIsMobileSummaryOpen(true)
-            }
+            onClick={() => setIsMobileSummaryOpen(true)}
             className="min-w-0 shrink-0 text-left"
           >
             <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500">
@@ -1259,16 +925,11 @@ export function CheckoutForm() {
           type={activeLocationPicker}
           search={locationSearch}
           selectedValue={
-            activeLocationPicker ===
-            "county"
-              ? formData.county
-              : formData.city
+            activeLocationPicker === "county" ? formData.county : formData.city
           }
           county={formData.county}
           options={pickerOptions}
-          onSearchChange={
-            setLocationSearch
-          }
+          onSearchChange={setLocationSearch}
           onSelect={selectLocation}
           onClose={closeLocationPicker}
         />
@@ -1284,7 +945,7 @@ type CheckoutSectionProps = {
   children: ReactNode;
 };
 
-function CheckoutSection({
+const CheckoutSection = memo(function CheckoutSection({
   step,
   title,
   description,
@@ -1303,19 +964,15 @@ function CheckoutSection({
           </h2>
 
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-neutral-600">
-              {description}
-            </p>
+            <p className="mt-1 text-sm leading-6 text-neutral-600">{description}</p>
           ) : null}
         </div>
       </header>
 
-      <div className="p-4 sm:p-7">
-        {children}
-      </div>
+      <div className="p-4 sm:p-7">{children}</div>
     </section>
   );
-}
+});
 
 type FormFieldProps = {
   id: string;
@@ -1325,7 +982,7 @@ type FormFieldProps = {
   children: ReactNode;
 };
 
-function FormField({
+const FormField = memo(function FormField({
   id,
   label,
   required = false,
@@ -1333,37 +990,25 @@ function FormField({
   children,
 }: FormFieldProps) {
   return (
-    <div
-      data-checkout-field={id}
-      className="space-y-2"
-    >
+    <div data-checkout-field={id} className="space-y-2">
       <label
         htmlFor={id}
         className="font-condensed block text-xs font-bold uppercase tracking-[0.09em] text-[#111111] sm:text-sm"
       >
         {label}
-
-        {required ? (
-          <span className="ml-1 text-primary">
-            *
-          </span>
-        ) : null}
+        {required ? <span className="ml-1 text-primary">*</span> : null}
       </label>
 
       {children}
 
       {error ? (
-        <p
-          id={`${id}-error`}
-          role="alert"
-          className="text-sm leading-5 text-red-600"
-        >
+        <p id={`${id}-error`} role="alert" className="text-sm leading-5 text-red-600">
           {error}
         </p>
       ) : null}
     </div>
   );
-}
+});
 
 type SearchableLocationFieldProps = {
   id: LocationPickerType;
@@ -1373,10 +1018,10 @@ type SearchableLocationFieldProps = {
   required?: boolean;
   error?: string;
   disabled?: boolean;
-  onClick: () => void;
+  onOpen: (type: LocationPickerType) => void;
 };
 
-function SearchableLocationField({
+const SearchableLocationField = memo(function SearchableLocationField({
   id,
   label,
   value,
@@ -1384,7 +1029,7 @@ function SearchableLocationField({
   required = false,
   error,
   disabled = false,
-  onClick,
+  onOpen,
 }: SearchableLocationFieldProps) {
   return (
     <div className="space-y-2">
@@ -1393,12 +1038,7 @@ function SearchableLocationField({
         className="font-condensed block text-xs font-bold uppercase tracking-[0.09em] text-[#111111] sm:text-sm"
       >
         {label}
-
-        {required ? (
-          <span className="ml-1 text-primary">
-            *
-          </span>
-        ) : null}
+        {required ? <span className="ml-1 text-primary">*</span> : null}
       </label>
 
       <button
@@ -1406,27 +1046,15 @@ function SearchableLocationField({
         type="button"
         data-checkout-field={id}
         disabled={disabled}
-        onClick={onClick}
+        onClick={() => onOpen(id)}
         aria-invalid={Boolean(error)}
-        aria-describedby={
-          error
-            ? `${id}-error`
-            : undefined
-        }
+        aria-describedby={error ? `${id}-error` : undefined}
         className={[
           "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 text-left text-base outline-none transition focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 sm:rounded-sm",
-          error
-            ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
-            : "border-neutral-300 focus:border-primary focus:ring-primary/15",
+          error ? errorBorderClassName : idleBorderClassName,
         ].join(" ")}
       >
-        <span
-          className={
-            value
-              ? "truncate text-[#111111]"
-              : "truncate text-neutral-400"
-          }
-        >
+        <span className={value ? "truncate text-[#111111]" : "truncate text-neutral-400"}>
           {value || placeholder}
         </span>
 
@@ -1434,17 +1062,13 @@ function SearchableLocationField({
       </button>
 
       {error ? (
-        <p
-          id={`${id}-error`}
-          role="alert"
-          className="text-sm leading-5 text-red-600"
-        >
+        <p id={`${id}-error`} role="alert" className="text-sm leading-5 text-red-600">
           {error}
         </p>
       ) : null}
     </div>
   );
-}
+});
 
 type LocationPickerDialogProps = {
   type: LocationPickerType;
@@ -1452,16 +1076,12 @@ type LocationPickerDialogProps = {
   selectedValue: string;
   county: string;
   options: string[];
-  onSearchChange: (
-    value: string,
-  ) => void;
-  onSelect: (
-    value: string,
-  ) => void;
+  onSearchChange: (value: string) => void;
+  onSelect: (value: string) => void;
   onClose: () => void;
 };
 
-function LocationPickerDialog({
+const LocationPickerDialog = memo(function LocationPickerDialog({
   type,
   search,
   selectedValue,
@@ -1471,35 +1091,35 @@ function LocationPickerDialog({
   onSelect,
   onClose,
 }: LocationPickerDialogProps) {
-  const title =
-    type === "county"
-      ? "Selectează județul"
-      : "Selectează localitatea";
+  // Bound to the real visible viewport so the results list is always fully
+  // visible above the mobile keyboard, instead of relying on svh/dvh which
+  // several mobile browsers don't shrink correctly when the keyboard opens.
+  const viewportHeight = useVisualViewportHeight();
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const placeholder =
-    type === "county"
-      ? "Caută județul..."
-      : "Caută localitatea...";
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [options]);
+
+  const title = type === "county" ? "Selectează județul" : "Selectează localitatea";
+  const placeholder = type === "county" ? "Caută județul..." : "Caută localitatea...";
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-6"
+      style={{ height: viewportHeight ? `${viewportHeight}px` : "100dvh" }}
+      className="fixed inset-x-0 top-0 z-[100] flex flex-col bg-white sm:bg-black/55 sm:backdrop-blur-sm sm:p-6 sm:items-center sm:justify-center"
       onMouseDown={(event) => {
-        if (
-          event.target ===
-          event.currentTarget
-        ) {
+        if (event.target === event.currentTarget) {
           onClose();
         }
       }}
     >
-      <section className="flex max-h-[88svh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[720px] sm:max-w-lg sm:rounded-2xl">
-        <header className="border-b border-neutral-200 px-4 pb-4 pt-3 sm:px-5 sm:pt-5">
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-neutral-300 sm:hidden" />
-
+      {/* Full-screen on mobile (keyboard-safe), centered card from sm: up */}
+      <section className="flex h-full w-full flex-1 flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[720px] sm:max-w-lg sm:flex-none sm:rounded-2xl sm:shadow-2xl">
+        <header className="shrink-0 border-b border-neutral-200 px-4 pb-4 pt-3 sm:px-5 sm:pt-5">
           <div className="flex items-center justify-between gap-4">
             <button
               type="button"
@@ -1516,11 +1136,8 @@ function LocationPickerDialog({
                 {title}
               </h2>
 
-              {type === "city" &&
-              county ? (
-                <p className="mt-1 truncate text-xs text-neutral-500">
-                  Județul {county}
-                </p>
+              {type === "city" && county ? (
+                <p className="mt-1 truncate text-xs text-neutral-500">Județul {county}</p>
               ) : null}
             </div>
 
@@ -1534,11 +1151,7 @@ function LocationPickerDialog({
               type="search"
               autoFocus
               value={search}
-              onChange={(event) =>
-                onSearchChange(
-                  event.target.value,
-                )
-              }
+              onChange={(event) => onSearchChange(event.target.value)}
               placeholder={placeholder}
               className="h-12 w-full rounded-xl border border-neutral-300 bg-neutral-50 pl-11 pr-10 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
             />
@@ -1546,9 +1159,7 @@ function LocationPickerDialog({
             {search ? (
               <button
                 type="button"
-                onClick={() =>
-                  onSearchChange("")
-                }
+                onClick={() => onSearchChange("")}
                 aria-label="Șterge căutarea"
                 className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500"
               >
@@ -1558,20 +1169,20 @@ function LocationPickerDialog({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3">
+        <div
+          ref={listRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3"
+        >
           {options.length > 0 ? (
             <div className="space-y-1">
               {options.map((option) => {
-                const isSelected =
-                  selectedValue === option;
+                const isSelected = selectedValue === option;
 
                 return (
                   <button
                     key={option}
                     type="button"
-                    onClick={() =>
-                      onSelect(option)
-                    }
+                    onClick={() => onSelect(option)}
                     className={[
                       "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl px-4 text-left text-[15px] transition active:scale-[0.99]",
                       isSelected
@@ -1579,9 +1190,7 @@ function LocationPickerDialog({
                         : "text-[#111111] hover:bg-neutral-100",
                     ].join(" ")}
                   >
-                    <span className="min-w-0 truncate">
-                      {option}
-                    </span>
+                    <span className="min-w-0 truncate">{option}</span>
 
                     {isSelected ? (
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
@@ -1595,34 +1204,23 @@ function LocationPickerDialog({
           ) : (
             <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">
               <MapPin className="size-7 text-neutral-400" />
-
-              <p className="mt-3 font-semibold text-[#111111]">
-                Niciun rezultat
-              </p>
-
-              <p className="mt-1 text-sm text-neutral-500">
-                Încearcă o altă căutare.
-              </p>
+              <p className="mt-3 font-semibold text-[#111111]">Niciun rezultat</p>
+              <p className="mt-1 text-sm text-neutral-500">Încearcă o altă căutare.</p>
             </div>
           )}
         </div>
 
         <div
-          className="border-t border-neutral-200 bg-white"
-          style={{
-            paddingBottom:
-              "env(safe-area-inset-bottom)",
-          }}
+          className="shrink-0 border-t border-neutral-200 bg-white"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         />
       </section>
     </div>
   );
-}
+});
 
 type OrderSummaryProps = {
-  items: ReturnType<
-    typeof useCartStore.getState
-  >["items"];
+  items: CartItems;
   subtotal: number;
   shippingCost: number;
   total: number;
@@ -1630,7 +1228,7 @@ type OrderSummaryProps = {
   isSubmitting: boolean;
 };
 
-function OrderSummary({
+const OrderSummary = memo(function OrderSummary({
   items,
   subtotal,
   shippingCost,
@@ -1658,9 +1256,7 @@ function OrderSummary({
           total={total}
         />
 
-        {error ? (
-          <ErrorMessage message={error} />
-        ) : null}
+        {error ? <ErrorMessage message={error} /> : null}
 
         <button
           type="submit"
@@ -1689,18 +1285,16 @@ function OrderSummary({
       </div>
     </section>
   );
-}
+});
 
 type OrderSummaryContentProps = {
-  items: ReturnType<
-    typeof useCartStore.getState
-  >["items"];
+  items: CartItems;
   subtotal: number;
   shippingCost: number;
   total: number;
 };
 
-function OrderSummaryContent({
+const OrderSummaryContent = memo(function OrderSummaryContent({
   items,
   subtotal,
   shippingCost,
@@ -1710,25 +1304,17 @@ function OrderSummaryContent({
     <>
       <div className="divide-y divide-neutral-200">
         {items.map((item) => (
-          <div
-            key={item.productId}
-            className="flex gap-4 py-4"
-          >
+          <div key={item.productId} className="flex gap-4 py-4">
             <div className="min-w-0 flex-1">
               <p className="font-condensed truncate text-sm font-bold uppercase tracking-[0.04em] text-[#111111]">
                 {item.name}
               </p>
 
-              <p className="mt-1 text-xs text-neutral-500">
-                Cantitate: {item.quantity}
-              </p>
+              <p className="mt-1 text-xs text-neutral-500">Cantitate: {item.quantity}</p>
             </div>
 
             <p className="font-condensed shrink-0 text-base font-bold text-[#111111]">
-              {formatPrice(
-                Number(item.price) *
-                  item.quantity,
-              )}
+              {formatPrice(Number(item.price) * item.quantity)}
             </p>
           </div>
         ))}
@@ -1736,20 +1322,11 @@ function OrderSummaryContent({
 
       <div className="border-t border-neutral-200 pt-5">
         <div className="space-y-3">
-          <PriceRow
-            label="Subtotal"
-            value={formatPrice(subtotal)}
-          />
+          <PriceRow label="Subtotal" value={formatPrice(subtotal)} />
 
           <PriceRow
             label="Livrare"
-            value={
-              shippingCost === 0
-                ? "Gratuită"
-                : formatPrice(
-                    shippingCost,
-                  )
-            }
+            value={shippingCost === 0 ? "Gratuită" : formatPrice(shippingCost)}
           />
         </div>
 
@@ -1773,13 +1350,9 @@ function OrderSummaryContent({
       </div>
     </>
   );
-}
+});
 
-function ErrorMessage({
-  message,
-}: {
-  message: string;
-}) {
+const ErrorMessage = memo(function ErrorMessage({ message }: { message: string }) {
   return (
     <div
       role="alert"
@@ -1788,36 +1361,25 @@ function ErrorMessage({
       {message}
     </div>
   );
-}
+});
 
-type PriceRowProps = {
-  label: string;
-  value: string;
-};
+type PriceRowProps = { label: string; value: string };
 
-function PriceRow({
-  label,
-  value,
-}: PriceRowProps) {
+const PriceRow = memo(function PriceRow({ label, value }: PriceRowProps) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-neutral-600">
-        {label}
-      </span>
-
-      <span className="font-condensed text-lg font-bold text-[#111111]">
-        {value}
-      </span>
+      <span className="text-sm text-neutral-600">{label}</span>
+      <span className="font-condensed text-lg font-bold text-[#111111]">{value}</span>
     </div>
   );
-}
+});
 
 type CheckoutTrustItemProps = {
   icon: typeof ShieldCheck;
   label: string;
 };
 
-function CheckoutTrustItem({
+const CheckoutTrustItem = memo(function CheckoutTrustItem({
   icon: Icon,
   label,
 }: CheckoutTrustItemProps) {
@@ -1830,4 +1392,4 @@ function CheckoutTrustItem({
       </span>
     </div>
   );
-}
+});
