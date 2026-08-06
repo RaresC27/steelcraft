@@ -1,24 +1,43 @@
 "use client";
 
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  LoaderCircle,
+  MapPin,
+  PackageCheck,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FormEvent,
-  ReactNode,
+  type FormEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 
+import { useCartStore } from "@/app/stores/cart-store";
 import {
   calculateShippingCost,
   FREE_SHIPPING_THRESHOLD,
 } from "@/lib/commerce/shipping";
+import {
+  getCitiesByCounty,
+  romaniaCounties,
+} from "@/lib/romania-locations";
 import { checkoutSchema } from "@/lib/validation/checkout";
-import { useCartStore } from "@/app/stores/cart-store";
 
-type PaymentMethod = "CASH_ON_DELIVERY" | "CARD";
+type PaymentMethod =
+  | "CASH_ON_DELIVERY"
+  | "CARD";
 
 type CheckoutFormData = {
   customerName: string;
@@ -34,7 +53,8 @@ type CheckoutFormData = {
   paymentMethod: PaymentMethod;
 };
 
-type CheckoutFieldName = keyof CheckoutFormData;
+type CheckoutFieldName =
+  keyof CheckoutFormData;
 
 type CheckoutFieldErrors = Partial<
   Record<CheckoutFieldName, string>
@@ -43,7 +63,10 @@ type CheckoutFieldErrors = Partial<
 type CreateOrderResponse = {
   message?: string;
   error?: string;
-  fieldErrors?: Record<string, string[] | undefined>;
+  fieldErrors?: Record<
+    string,
+    string[] | undefined
+  >;
   order?: {
     id: number;
     orderNumber: string;
@@ -56,6 +79,10 @@ type CreateOrderResponse = {
     createdAt: string;
   };
 };
+
+type LocationPickerType =
+  | "county"
+  | "city";
 
 const initialFormData: CheckoutFormData = {
   customerName: "",
@@ -72,10 +99,10 @@ const initialFormData: CheckoutFormData = {
 };
 
 const inputClassName =
-  "h-12 w-full rounded-sm border bg-white px-4 font-barlow text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2";
+  "h-12 w-full rounded-xl border bg-white px-4 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500 sm:rounded-sm";
 
 const textareaClassName =
-  "min-h-32 w-full resize-y rounded-sm border bg-white px-4 py-3 font-barlow text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2";
+  "min-h-28 w-full resize-y rounded-xl border bg-white px-4 py-3 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 sm:min-h-32 sm:rounded-sm";
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("ro-RO", {
@@ -85,30 +112,39 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
-function getInputClassName(hasError: boolean) {
+function getInputClassName(
+  hasError: boolean,
+) {
   return [
     inputClassName,
     hasError
       ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
-      : "border-neutral-300 focus:border-[#ff5500] focus:ring-[#ff5500]/15",
+      : "border-neutral-300 focus:border-primary focus:ring-primary/15",
   ].join(" ");
 }
 
-function getTextareaClassName(hasError: boolean) {
+function getTextareaClassName(
+  hasError: boolean,
+) {
   return [
     textareaClassName,
     hasError
       ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
-      : "border-neutral-300 focus:border-[#ff5500] focus:ring-[#ff5500]/15",
+      : "border-neutral-300 focus:border-primary focus:ring-primary/15",
   ].join(" ");
 }
 
 function normalizeFieldErrors(
-  source: Record<string, string[] | undefined>,
+  source: Record<
+    string,
+    string[] | undefined
+  >,
 ) {
   const errors: CheckoutFieldErrors = {};
 
-  for (const [field, messages] of Object.entries(source)) {
+  for (const [field, messages] of Object.entries(
+    source,
+  )) {
     const firstMessage = messages?.[0];
 
     if (!firstMessage) {
@@ -116,46 +152,169 @@ function normalizeFieldErrors(
     }
 
     if (field in initialFormData) {
-      errors[field as CheckoutFieldName] = firstMessage;
+      errors[
+        field as CheckoutFieldName
+      ] = firstMessage;
     }
   }
 
   return errors;
 }
 
+function normalizeSearchValue(
+  value: string,
+) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function CheckoutForm() {
   const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
 
-  const items = useCartStore((state) => state.items);
-  const clearCart = useCartStore((state) => state.clearCart);
+  const formRef =
+    useRef<HTMLFormElement>(null);
+
+  const submitLockRef =
+    useRef(false);
+
+  const items = useCartStore(
+    (state) => state.items,
+  );
+
+  const clearCart = useCartStore(
+    (state) => state.clearCart,
+  );
 
   const [formData, setFormData] =
-    useState<CheckoutFormData>(initialFormData);
+    useState<CheckoutFormData>(
+      initialFormData,
+    );
 
   const [fieldErrors, setFieldErrors] =
     useState<CheckoutFieldErrors>({});
 
-  const [isMounted, setIsMounted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [isMounted, setIsMounted] =
+    useState(false);
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [
+    activeLocationPicker,
+    setActiveLocationPicker,
+  ] = useState<LocationPickerType | null>(
+    null,
+  );
+
+  const [locationSearch, setLocationSearch] =
+    useState("");
+
+  const [
+    isMobileSummaryOpen,
+    setIsMobileSummaryOpen,
+  ] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!activeLocationPicker) {
+      return;
+    }
+
+    const previousOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow =
+      "hidden";
+
+    function handleKeyDown(
+      event: KeyboardEvent,
+    ) {
+      if (event.key === "Escape") {
+        closeLocationPicker();
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [activeLocationPicker]);
+
   const subtotal = useMemo(() => {
-    return items.reduce((total, item) => {
-      return total + Number(item.price) * item.quantity;
-    }, 0);
+    return items.reduce(
+      (total, item) =>
+        total +
+        Number(item.price) *
+          item.quantity,
+      0,
+    );
   }, [items]);
 
   const shippingCost = useMemo(
-    () => calculateShippingCost(subtotal),
+    () =>
+      calculateShippingCost(subtotal),
     [subtotal],
   );
 
-  const total = subtotal + shippingCost;
+  const total =
+    subtotal + shippingCost;
+
+  const availableCities = useMemo(
+    () =>
+      formData.county
+        ? getCitiesByCounty(
+            formData.county,
+          )
+        : [],
+    [formData.county],
+  );
+
+  const pickerOptions = useMemo(() => {
+    const source =
+      activeLocationPicker === "county"
+        ? romaniaCounties.map(
+            (county) => county.name,
+          )
+        : availableCities;
+
+    const normalizedSearch =
+      normalizeSearchValue(
+        locationSearch,
+      );
+
+    if (!normalizedSearch) {
+      return source;
+    }
+
+    return source.filter((option) =>
+      normalizeSearchValue(
+        option,
+      ).includes(normalizedSearch),
+    );
+  }, [
+    activeLocationPicker,
+    availableCities,
+    locationSearch,
+  ]);
 
   function updateField(
     field: CheckoutFieldName,
@@ -166,53 +325,149 @@ export function CheckoutForm() {
       [field]: value,
     }));
 
-    setFieldErrors((currentErrors) => {
-      if (!currentErrors[field]) {
-        return currentErrors;
-      }
+    setFieldErrors(
+      (currentErrors) => {
+        if (!currentErrors[field]) {
+          return currentErrors;
+        }
 
-      const nextErrors = { ...currentErrors };
-      delete nextErrors[field];
+        const nextErrors = {
+          ...currentErrors,
+        };
 
-      return nextErrors;
-    });
+        delete nextErrors[field];
+
+        return nextErrors;
+      },
+    );
 
     if (error) {
       setError("");
     }
   }
 
+  function openLocationPicker(
+    type: LocationPickerType,
+  ) {
+    if (
+      type === "city" &&
+      !formData.county
+    ) {
+      setFieldErrors(
+        (currentErrors) => ({
+          ...currentErrors,
+          county:
+            "Selectează mai întâi județul.",
+        }),
+      );
+
+      return;
+    }
+
+    setLocationSearch("");
+    setActiveLocationPicker(type);
+  }
+
+  function closeLocationPicker() {
+    setActiveLocationPicker(null);
+    setLocationSearch("");
+  }
+
+  function selectLocation(
+    value: string,
+  ) {
+    if (
+      activeLocationPicker ===
+      "county"
+    ) {
+      updateField("county", value);
+      updateField("city", "");
+    }
+
+    if (
+      activeLocationPicker === "city"
+    ) {
+      updateField("city", value);
+    }
+
+    closeLocationPicker();
+  }
+
   function focusFirstInvalidField(
     errors: CheckoutFieldErrors,
   ) {
-    const firstInvalidField = Object.keys(
-      errors,
-    )[0] as CheckoutFieldName | undefined;
+    const firstInvalidField =
+      Object.keys(
+        errors,
+      )[0] as
+        | CheckoutFieldName
+        | undefined;
 
     if (!firstInvalidField) {
       return;
     }
 
-    window.requestAnimationFrame(() => {
-      const element = formRef.current?.elements.namedItem(
-        firstInvalidField,
-      );
+    window.requestAnimationFrame(
+      () => {
+        const fieldElement =
+          formRef.current?.querySelector<
+            HTMLElement
+          >(
+            `[data-checkout-field="${firstInvalidField}"]`,
+          );
 
-      if (
-        element instanceof HTMLInputElement ||
-        element instanceof HTMLTextAreaElement ||
-        element instanceof HTMLSelectElement
-      ) {
-        element.focus();
-      }
-    });
+        if (fieldElement) {
+          fieldElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          fieldElement.focus();
+
+          return;
+        }
+
+        const element =
+          formRef.current?.elements.namedItem(
+            firstInvalidField,
+          );
+
+        if (
+          element instanceof
+            HTMLInputElement ||
+          element instanceof
+            HTMLTextAreaElement ||
+          element instanceof
+            HTMLSelectElement
+        ) {
+          element.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          element.focus();
+        }
+      },
+    );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
+    if (
+      isSubmitting ||
+      submitLockRef.current
+    ) {
+      return;
+    }
+
     if (items.length === 0) {
-      setError("Coșul de cumpărături este gol.");
+      setError(
+        "Coșul de cumpărături este gol.",
+      );
+
       return;
     }
 
@@ -225,15 +480,23 @@ export function CheckoutForm() {
     };
 
     const clientValidation =
-      checkoutSchema.safeParse(requestBody);
-
-    if (!clientValidation.success) {
-      const errors = normalizeFieldErrors(
-        clientValidation.error.flatten().fieldErrors,
+      checkoutSchema.safeParse(
+        requestBody,
       );
 
+    if (!clientValidation.success) {
+      const errors =
+        normalizeFieldErrors(
+          clientValidation.error.flatten()
+            .fieldErrors,
+        );
+
       setFieldErrors(errors);
-      setError("Verifică informațiile marcate în formular.");
+
+      setError(
+        "Verifică informațiile marcate în formular.",
+      );
+
       focusFirstInvalidField(errors);
 
       return;
@@ -242,31 +505,43 @@ export function CheckoutForm() {
     setError("");
     setFieldErrors({});
     setIsSubmitting(true);
+    submitLockRef.current = true;
 
     try {
-      const response = await fetch("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        "/api/orders",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify(
+            clientValidation.data,
+          ),
         },
-        body: JSON.stringify(clientValidation.data),
-      });
+      );
 
       const data =
         (await response.json()) as CreateOrderResponse;
 
       if (!response.ok) {
         if (data.fieldErrors) {
-          const errors = normalizeFieldErrors(
-            data.fieldErrors,
-          );
+          const errors =
+            normalizeFieldErrors(
+              data.fieldErrors,
+            );
 
           setFieldErrors(errors);
-          focusFirstInvalidField(errors);
+
+          focusFirstInvalidField(
+            errors,
+          );
         }
 
         throw new Error(
-          data.error ?? "Comanda nu a putut fi trimisă.",
+          data.error ??
+            "Comanda nu a putut fi trimisă.",
         );
       }
 
@@ -289,6 +564,8 @@ export function CheckoutForm() {
           ? caughtError.message
           : "A apărut o eroare neașteptată.",
       );
+
+      submitLockRef.current = false;
     } finally {
       setIsSubmitting(false);
     }
@@ -296,29 +573,38 @@ export function CheckoutForm() {
 
   if (!isMounted) {
     return (
-      <div className="rounded-sm border border-neutral-200 bg-white p-8">
-        <p className="font-barlow text-neutral-600">
-          Se încarcă datele coșului...
-        </p>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:rounded-sm sm:p-8">
+        <div className="flex items-center gap-3">
+          <LoaderCircle className="size-5 animate-spin text-primary" />
+
+          <p className="text-sm text-neutral-600">
+            Se încarcă datele coșului...
+          </p>
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <section className="rounded-sm border border-neutral-200 bg-white px-6 py-14 text-center shadow-sm">
-        <h2 className="font-bebas-neue text-3xl uppercase tracking-wide text-[#111111]">
+      <section className="rounded-2xl border border-neutral-200 bg-white px-5 py-12 text-center shadow-sm sm:rounded-sm sm:px-8 sm:py-14">
+        <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
+          <ShoppingBag className="size-6" />
+        </span>
+
+        <h2 className="font-display mt-5 text-3xl uppercase leading-none text-[#111111] sm:text-4xl">
           Coșul este gol
         </h2>
 
-        <p className="mx-auto mt-3 max-w-md font-barlow text-neutral-600">
-          Adaugă cel puțin un produs în coș înainte de a continua
-          către checkout.
+        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-neutral-600">
+          Adaugă cel puțin un produs în coș
+          înainte de a continua către
+          finalizarea comenzii.
         </p>
 
         <Link
           href="/produse"
-          className="mt-7 inline-flex min-h-12 items-center justify-center rounded-sm bg-[#ff5500] px-7 font-barlow-condensed text-base font-bold uppercase tracking-wider text-white transition hover:bg-[#e64d00]"
+          className="font-condensed mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-7 text-sm font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98] hover:opacity-90 sm:rounded-sm"
         >
           Vezi produsele
         </Link>
@@ -327,544 +613,707 @@ export function CheckoutForm() {
   }
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      noValidate
-      className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px]"
-    >
-      <div className="space-y-6">
-        <section className="border border-neutral-200 bg-white p-5 shadow-sm sm:p-7">
-          <SectionHeading
+    <>
+      <form
+        id="checkout-form"
+        ref={formRef}
+        onSubmit={handleSubmit}
+        noValidate
+        className="grid items-start gap-5 pb-28 sm:gap-8 sm:pb-0 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_400px]"
+      >
+        <div className="space-y-4 sm:space-y-6">
+          <CheckoutSection
+            step="01"
             title="Date de contact"
-            description="Vom folosi aceste date pentru confirmarea comenzii."
-          />
-
-          <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-            <FormField
-              id="customerName"
-              label="Nume complet"
-              required
-              error={fieldErrors.customerName}
-            >
-              <input
+            description="Datele folosite pentru confirmarea comenzii."
+          >
+            <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              <FormField
                 id="customerName"
-                name="customerName"
-                type="text"
-                autoComplete="name"
-                value={formData.customerName}
-                onChange={(event) =>
-                  updateField(
-                    "customerName",
-                    event.target.value,
-                  )
-                }
-                aria-invalid={Boolean(
-                  fieldErrors.customerName,
-                )}
-                aria-describedby={
+                label="Nume complet"
+                required
+                error={
                   fieldErrors.customerName
-                    ? "customerName-error"
-                    : undefined
                 }
-                className={getInputClassName(
-                  Boolean(fieldErrors.customerName),
-                )}
-              />
-            </FormField>
-
-            <FormField
-              id="phone"
-              label="Telefon"
-              required
-              error={fieldErrors.phone}
-            >
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="07xx xxx xxx"
-                value={formData.phone}
-                onChange={(event) =>
-                  updateField("phone", event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.phone)}
-                aria-describedby={
-                  fieldErrors.phone
-                    ? "phone-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.phone),
-                )}
-              />
-            </FormField>
-
-            <div className="sm:col-span-2">
-              <FormField
-                id="email"
-                label="Email"
-                required
-                error={fieldErrors.email}
               >
                 <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="nume@exemplu.ro"
-                  value={formData.email}
-                  onChange={(event) =>
-                    updateField("email", event.target.value)
-                  }
-                  aria-invalid={Boolean(fieldErrors.email)}
-                  aria-describedby={
-                    fieldErrors.email
-                      ? "email-error"
-                      : undefined
-                  }
-                  className={getInputClassName(
-                    Boolean(fieldErrors.email),
-                  )}
-                />
-              </FormField>
-            </div>
-          </div>
-        </section>
-
-        <section className="border border-neutral-200 bg-white p-5 shadow-sm sm:p-7">
-          <SectionHeading
-            title="Date firmă"
-            description="Câmpurile sunt opționale."
-          />
-
-          <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-            <FormField
-              id="company"
-              label="Denumire firmă"
-              error={fieldErrors.company}
-            >
-              <input
-                id="company"
-                name="company"
-                type="text"
-                autoComplete="organization"
-                value={formData.company}
-                onChange={(event) =>
-                  updateField("company", event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.company)}
-                aria-describedby={
-                  fieldErrors.company
-                    ? "company-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.company),
-                )}
-              />
-            </FormField>
-
-            <FormField
-              id="vatNumber"
-              label="CUI / CIF"
-              error={fieldErrors.vatNumber}
-            >
-              <input
-                id="vatNumber"
-                name="vatNumber"
-                type="text"
-                autoCapitalize="characters"
-                placeholder="RO12345678"
-                value={formData.vatNumber}
-                onChange={(event) =>
-                  updateField(
-                    "vatNumber",
-                    event.target.value.toUpperCase(),
-                  )
-                }
-                aria-invalid={Boolean(
-                  fieldErrors.vatNumber,
-                )}
-                aria-describedby={
-                  fieldErrors.vatNumber
-                    ? "vatNumber-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.vatNumber),
-                )}
-              />
-            </FormField>
-          </div>
-        </section>
-
-        <section className="border border-neutral-200 bg-white p-5 shadow-sm sm:p-7">
-          <SectionHeading title="Adresa de livrare" />
-
-          <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-            <FormField
-              id="county"
-              label="Județ"
-              required
-              error={fieldErrors.county}
-            >
-              <input
-                id="county"
-                name="county"
-                type="text"
-                autoComplete="address-level1"
-                value={formData.county}
-                onChange={(event) =>
-                  updateField("county", event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.county)}
-                aria-describedby={
-                  fieldErrors.county
-                    ? "county-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.county),
-                )}
-              />
-            </FormField>
-
-            <FormField
-              id="city"
-              label="Localitate"
-              required
-              error={fieldErrors.city}
-            >
-              <input
-                id="city"
-                name="city"
-                type="text"
-                autoComplete="address-level2"
-                value={formData.city}
-                onChange={(event) =>
-                  updateField("city", event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.city)}
-                aria-describedby={
-                  fieldErrors.city
-                    ? "city-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.city),
-                )}
-              />
-            </FormField>
-
-            <div className="sm:col-span-2">
-              <FormField
-                id="address"
-                label="Adresă"
-                required
-                error={fieldErrors.address}
-              >
-                <input
-                  id="address"
-                  name="address"
+                  id="customerName"
+                  name="customerName"
                   type="text"
-                  autoComplete="street-address"
-                  placeholder="Stradă, număr, bloc, scară, apartament"
-                  value={formData.address}
+                  autoComplete="name"
+                  disabled={isSubmitting}
+                  value={
+                    formData.customerName
+                  }
                   onChange={(event) =>
                     updateField(
-                      "address",
+                      "customerName",
                       event.target.value,
                     )
                   }
                   aria-invalid={Boolean(
-                    fieldErrors.address,
+                    fieldErrors.customerName,
                   )}
                   aria-describedby={
-                    fieldErrors.address
-                      ? "address-error"
+                    fieldErrors.customerName
+                      ? "customerName-error"
                       : undefined
                   }
                   className={getInputClassName(
-                    Boolean(fieldErrors.address),
+                    Boolean(
+                      fieldErrors.customerName,
+                    ),
                   )}
                 />
               </FormField>
-            </div>
 
-            <FormField
-              id="postalCode"
-              label="Cod poștal"
-              error={fieldErrors.postalCode}
-            >
-              <input
-                id="postalCode"
-                name="postalCode"
-                type="text"
-                inputMode="numeric"
-                autoComplete="postal-code"
-                maxLength={6}
-                placeholder="123456"
-                value={formData.postalCode}
-                onChange={(event) =>
-                  updateField(
-                    "postalCode",
-                    event.target.value.replace(/\D/g, ""),
-                  )
-                }
-                aria-invalid={Boolean(
-                  fieldErrors.postalCode,
-                )}
-                aria-describedby={
-                  fieldErrors.postalCode
-                    ? "postalCode-error"
-                    : undefined
-                }
-                className={getInputClassName(
-                  Boolean(fieldErrors.postalCode),
-                )}
-              />
-            </FormField>
-
-            <div className="sm:col-span-2">
               <FormField
-                id="notes"
-                label="Observații"
-                error={fieldErrors.notes}
+                id="phone"
+                label="Telefon"
+                required
+                error={fieldErrors.phone}
               >
-                <textarea
-                  id="notes"
-                  name="notes"
-                  rows={5}
-                  maxLength={1000}
-                  placeholder="Detalii despre livrare sau alte observații"
-                  value={formData.notes}
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  disabled={isSubmitting}
+                  placeholder="07xx xxx xxx"
+                  value={formData.phone}
                   onChange={(event) =>
-                    updateField("notes", event.target.value)
+                    updateField(
+                      "phone",
+                      event.target.value,
+                    )
                   }
-                  aria-invalid={Boolean(fieldErrors.notes)}
+                  aria-invalid={Boolean(
+                    fieldErrors.phone,
+                  )}
                   aria-describedby={
-                    fieldErrors.notes
-                      ? "notes-error"
+                    fieldErrors.phone
+                      ? "phone-error"
                       : undefined
                   }
-                  className={getTextareaClassName(
-                    Boolean(fieldErrors.notes),
+                  className={getInputClassName(
+                    Boolean(
+                      fieldErrors.phone,
+                    ),
                   )}
                 />
-
-                <p className="text-right text-xs text-neutral-400">
-                  {formData.notes.length}/1000
-                </p>
               </FormField>
+
+              <div className="sm:col-span-2">
+                <FormField
+                  id="email"
+                  label="Email"
+                  required
+                  error={
+                    fieldErrors.email
+                  }
+                >
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    disabled={isSubmitting}
+                    placeholder="nume@exemplu.ro"
+                    value={formData.email}
+                    onChange={(event) =>
+                      updateField(
+                        "email",
+                        event.target.value,
+                      )
+                    }
+                    aria-invalid={Boolean(
+                      fieldErrors.email,
+                    )}
+                    aria-describedby={
+                      fieldErrors.email
+                        ? "email-error"
+                        : undefined
+                    }
+                    className={getInputClassName(
+                      Boolean(
+                        fieldErrors.email,
+                      ),
+                    )}
+                  />
+                </FormField>
+              </div>
             </div>
-          </div>
-        </section>
+          </CheckoutSection>
 
-        <section className="border border-neutral-200 bg-white p-5 shadow-sm sm:p-7">
-          <SectionHeading
-            title="Metoda de plată"
-            description="Selectează cum dorești să achiți comanda."
-          />
+          <details className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-sm">
+            <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-7">
+              <div>
+                <p className="font-condensed text-xs font-bold uppercase tracking-[0.14em] text-neutral-500">
+                  Opțional
+                </p>
 
-          <div className="space-y-3">
-            <label
-              className={[
-                "flex cursor-pointer items-start gap-4 rounded-sm border p-4 transition",
-                formData.paymentMethod ===
-                "CASH_ON_DELIVERY"
-                  ? "border-[#ff5500] bg-[#ff5500]/5"
-                  : "border-neutral-200 hover:border-neutral-300",
-              ].join(" ")}
-            >
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="CASH_ON_DELIVERY"
-                checked={
-                  formData.paymentMethod ===
-                  "CASH_ON_DELIVERY"
-                }
-                onChange={() =>
-                  updateField(
-                    "paymentMethod",
-                    "CASH_ON_DELIVERY",
+                <h2 className="font-display mt-1 text-2xl uppercase leading-none text-[#111111] sm:text-3xl">
+                  Date firmă
+                </h2>
+              </div>
+
+              <ChevronDown className="size-5 shrink-0 text-neutral-500 transition group-open:rotate-180" />
+            </summary>
+
+            <div className="border-t border-neutral-200 px-4 pb-5 pt-4 sm:px-7 sm:pb-7">
+              <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                <FormField
+                  id="company"
+                  label="Denumire firmă"
+                  error={
+                    fieldErrors.company
+                  }
+                >
+                  <input
+                    id="company"
+                    name="company"
+                    type="text"
+                    autoComplete="organization"
+                    disabled={isSubmitting}
+                    value={formData.company}
+                    onChange={(event) =>
+                      updateField(
+                        "company",
+                        event.target.value,
+                      )
+                    }
+                    aria-invalid={Boolean(
+                      fieldErrors.company,
+                    )}
+                    aria-describedby={
+                      fieldErrors.company
+                        ? "company-error"
+                        : undefined
+                    }
+                    className={getInputClassName(
+                      Boolean(
+                        fieldErrors.company,
+                      ),
+                    )}
+                  />
+                </FormField>
+
+                <FormField
+                  id="vatNumber"
+                  label="CUI / CIF"
+                  error={
+                    fieldErrors.vatNumber
+                  }
+                >
+                  <input
+                    id="vatNumber"
+                    name="vatNumber"
+                    type="text"
+                    autoCapitalize="characters"
+                    disabled={isSubmitting}
+                    placeholder="RO12345678"
+                    value={
+                      formData.vatNumber
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "vatNumber",
+                        event.target.value.toUpperCase(),
+                      )
+                    }
+                    aria-invalid={Boolean(
+                      fieldErrors.vatNumber,
+                    )}
+                    aria-describedby={
+                      fieldErrors.vatNumber
+                        ? "vatNumber-error"
+                        : undefined
+                    }
+                    className={getInputClassName(
+                      Boolean(
+                        fieldErrors.vatNumber,
+                      ),
+                    )}
+                  />
+                </FormField>
+              </div>
+            </div>
+          </details>
+
+          <CheckoutSection
+            step="02"
+            title="Adresa de livrare"
+            description="Selectează județul și caută rapid localitatea."
+          >
+            <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              <SearchableLocationField
+                id="county"
+                label="Județ"
+                required
+                value={formData.county}
+                placeholder="Selectează județul"
+                error={fieldErrors.county}
+                disabled={isSubmitting}
+                onClick={() =>
+                  openLocationPicker(
+                    "county",
                   )
                 }
-                className="mt-1 size-4 accent-[#ff5500]"
               />
 
-              <span>
-                <span className="block font-barlow-condensed text-base font-bold uppercase tracking-wide text-[#111111]">
-                  Ramburs la livrare
-                </span>
-
-                <span className="mt-1 block font-barlow text-sm text-neutral-600">
-                  Plătești când primești comanda.
-                </span>
-              </span>
-            </label>
-
-            <label className="flex cursor-not-allowed items-start gap-4 rounded-sm border border-neutral-200 bg-neutral-100 p-4 opacity-60">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="CARD"
-                disabled
-                className="mt-1 size-4"
-              />
-
-              <span>
-                <span className="block font-barlow-condensed text-base font-bold uppercase tracking-wide text-[#111111]">
-                  Plată cu cardul
-                </span>
-
-                <span className="mt-1 block font-barlow text-sm text-neutral-500">
-                  Disponibilă în curând.
-                </span>
-              </span>
-            </label>
-
-            {fieldErrors.paymentMethod ? (
-              <p
-                id="paymentMethod-error"
-                role="alert"
-                className="text-sm text-red-600"
-              >
-                {fieldErrors.paymentMethod}
-              </p>
-            ) : null}
-          </div>
-        </section>
-      </div>
-
-      <aside className="lg:sticky lg:top-28 lg:self-start">
-        <section className="border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="border-b border-neutral-200 pb-4 font-bebas-neue text-3xl uppercase tracking-wide text-[#111111]">
-            Rezumat comandă
-          </h2>
-
-          <div className="divide-y divide-neutral-200">
-            {items.map((item) => (
-              <div
-                key={item.productId}
-                className="flex gap-4 py-5"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-barlow-condensed text-base font-semibold uppercase tracking-wide text-[#111111]">
-                    {item.name}
-                  </p>
-
-                  <p className="mt-1 font-barlow text-sm text-neutral-500">
-                    Cantitate: {item.quantity}
-                  </p>
-                </div>
-
-                <p className="shrink-0 font-barlow-condensed text-base font-bold text-[#111111]">
-                  {formatPrice(
-                    Number(item.price) * item.quantity,
-                  )}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-neutral-200 pt-5">
-            <div className="space-y-3">
-              <PriceRow
-                label="Subtotal"
-                value={formatPrice(subtotal)}
-              />
-
-              <PriceRow
-                label="Livrare"
-                value={
-                  shippingCost === 0
-                    ? "Gratuită"
-                    : formatPrice(shippingCost)
+              <SearchableLocationField
+                id="city"
+                label="Localitate"
+                required
+                value={formData.city}
+                placeholder={
+                  formData.county
+                    ? "Selectează localitatea"
+                    : "Alege mai întâi județul"
+                }
+                error={fieldErrors.city}
+                disabled={
+                  isSubmitting ||
+                  !formData.county
+                }
+                onClick={() =>
+                  openLocationPicker("city")
                 }
               />
-            </div>
 
-            <div className="mt-5 flex items-end justify-between gap-4 border-t border-neutral-200 pt-5">
-              <span className="font-barlow-condensed text-lg font-bold uppercase tracking-wide text-[#111111]">
-                Total
+              <input
+                type="hidden"
+                name="county"
+                value={formData.county}
+              />
+
+              <input
+                type="hidden"
+                name="city"
+                value={formData.city}
+              />
+
+              <div className="sm:col-span-2">
+                <FormField
+                  id="address"
+                  label="Adresă"
+                  required
+                  error={
+                    fieldErrors.address
+                  }
+                >
+                  <input
+                    id="address"
+                    name="address"
+                    type="text"
+                    autoComplete="street-address"
+                    disabled={isSubmitting}
+                    placeholder="Stradă, număr, bloc, scară, apartament"
+                    value={formData.address}
+                    onChange={(event) =>
+                      updateField(
+                        "address",
+                        event.target.value,
+                      )
+                    }
+                    aria-invalid={Boolean(
+                      fieldErrors.address,
+                    )}
+                    aria-describedby={
+                      fieldErrors.address
+                        ? "address-error"
+                        : undefined
+                    }
+                    className={getInputClassName(
+                      Boolean(
+                        fieldErrors.address,
+                      ),
+                    )}
+                  />
+                </FormField>
+              </div>
+
+              <FormField
+                id="postalCode"
+                label="Cod poștal"
+                error={
+                  fieldErrors.postalCode
+                }
+              >
+                <input
+                  id="postalCode"
+                  name="postalCode"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  disabled={isSubmitting}
+                  maxLength={6}
+                  placeholder="123456"
+                  value={
+                    formData.postalCode
+                  }
+                  onChange={(event) =>
+                    updateField(
+                      "postalCode",
+                      event.target.value.replace(
+                        /\D/g,
+                        "",
+                      ),
+                    )
+                  }
+                  aria-invalid={Boolean(
+                    fieldErrors.postalCode,
+                  )}
+                  aria-describedby={
+                    fieldErrors.postalCode
+                      ? "postalCode-error"
+                      : undefined
+                  }
+                  className={getInputClassName(
+                    Boolean(
+                      fieldErrors.postalCode,
+                    ),
+                  )}
+                />
+              </FormField>
+
+              <div className="sm:col-span-2">
+                <FormField
+                  id="notes"
+                  label="Observații"
+                  error={fieldErrors.notes}
+                >
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    rows={4}
+                    maxLength={1000}
+                    disabled={isSubmitting}
+                    placeholder="Detalii despre livrare sau alte observații"
+                    value={formData.notes}
+                    onChange={(event) =>
+                      updateField(
+                        "notes",
+                        event.target.value,
+                      )
+                    }
+                    aria-invalid={Boolean(
+                      fieldErrors.notes,
+                    )}
+                    aria-describedby={
+                      fieldErrors.notes
+                        ? "notes-error"
+                        : undefined
+                    }
+                    className={getTextareaClassName(
+                      Boolean(
+                        fieldErrors.notes,
+                      ),
+                    )}
+                  />
+
+                  <p className="text-right text-xs text-neutral-400">
+                    {formData.notes.length}
+                    /1000
+                  </p>
+                </FormField>
+              </div>
+            </div>
+          </CheckoutSection>
+
+          <CheckoutSection
+            step="03"
+            title="Metoda de plată"
+          >
+            <div className="space-y-3">
+              <label
+                className={[
+                  "flex min-h-20 cursor-pointer items-start gap-4 rounded-xl border p-4 transition active:scale-[0.99] sm:rounded-sm",
+                  formData.paymentMethod ===
+                  "CASH_ON_DELIVERY"
+                    ? "border-primary bg-primary/[0.04]"
+                    : "border-neutral-200 hover:border-neutral-300",
+                ].join(" ")}
+              >
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="CASH_ON_DELIVERY"
+                  disabled={isSubmitting}
+                  checked={
+                    formData.paymentMethod ===
+                    "CASH_ON_DELIVERY"
+                  }
+                  onChange={() =>
+                    updateField(
+                      "paymentMethod",
+                      "CASH_ON_DELIVERY",
+                    )
+                  }
+                  className="mt-1 size-4 accent-primary"
+                />
+
+                <span className="flex-1">
+                  <span className="font-condensed block text-base font-bold uppercase tracking-[0.05em] text-[#111111]">
+                    Ramburs la livrare
+                  </span>
+
+                  <span className="mt-1 block text-sm leading-6 text-neutral-600">
+                    Plătești când primești
+                    comanda.
+                  </span>
+                </span>
+
+                {formData.paymentMethod ===
+                "CASH_ON_DELIVERY" ? (
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                    <Check className="size-4" />
+                  </span>
+                ) : null}
+              </label>
+
+              <div className="flex min-h-20 cursor-not-allowed items-start gap-4 rounded-xl border border-neutral-200 bg-neutral-100 p-4 opacity-60 sm:rounded-sm">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="CARD"
+                  disabled
+                  className="mt-1 size-4"
+                />
+
+                <span>
+                  <span className="font-condensed block text-base font-bold uppercase tracking-[0.05em] text-[#111111]">
+                    Plată cu cardul
+                  </span>
+
+                  <span className="mt-1 block text-sm text-neutral-500">
+                    Disponibilă în curând.
+                  </span>
+                </span>
+              </div>
+
+              {fieldErrors.paymentMethod ? (
+                <p
+                  id="paymentMethod-error"
+                  role="alert"
+                  className="text-sm text-red-600"
+                >
+                  {
+                    fieldErrors.paymentMethod
+                  }
+                </p>
+              ) : null}
+            </div>
+          </CheckoutSection>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <CheckoutTrustItem
+              icon={ShieldCheck}
+              label="Date protejate"
+            />
+
+            <CheckoutTrustItem
+              icon={PackageCheck}
+              label="Stoc verificat"
+            />
+
+            <CheckoutTrustItem
+              icon={Truck}
+              label="Livrare calculată"
+            />
+          </div>
+        </div>
+
+        <aside className="hidden lg:sticky lg:top-28 lg:block lg:self-start">
+          <OrderSummary
+            items={items}
+            subtotal={subtotal}
+            shippingCost={shippingCost}
+            total={total}
+            error={error}
+            isSubmitting={isSubmitting}
+          />
+        </aside>
+
+        <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm lg:hidden">
+          <button
+            type="button"
+            onClick={() =>
+              setIsMobileSummaryOpen(
+                (current) => !current,
+              )
+            }
+            aria-expanded={
+              isMobileSummaryOpen
+            }
+            className="flex min-h-16 w-full items-center justify-between gap-4 px-4 text-left"
+          >
+            <span>
+              <span className="font-condensed block text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+                Rezumat comandă
               </span>
 
-              <span className="font-barlow-condensed text-2xl font-bold text-[#111111]">
+              <span className="mt-1 block font-condensed text-lg font-bold text-[#111111]">
+                {items.length}{" "}
+                {items.length === 1
+                  ? "produs"
+                  : "produse"}
+              </span>
+            </span>
+
+            <span className="flex items-center gap-3">
+              <span className="font-condensed text-xl font-bold text-[#111111]">
                 {formatPrice(total)}
               </span>
-            </div>
 
-            <p className="mt-3 font-barlow text-xs leading-relaxed text-neutral-500">
-              {shippingCost === 0
-                ? "Comanda beneficiază de livrare gratuită."
-                : `Livrare gratuită pentru comenzi de minimum ${formatPrice(
-                    FREE_SHIPPING_THRESHOLD,
-                  )}.`}
-            </p>
+              <ChevronDown
+                className={[
+                  "size-5 text-neutral-500 transition",
+                  isMobileSummaryOpen
+                    ? "rotate-180"
+                    : "",
+                ].join(" ")}
+              />
+            </span>
+          </button>
 
-            <p className="mt-2 font-barlow text-xs leading-relaxed text-neutral-500">
-              Prețurile, stocul și totalul final sunt verificate
-              din nou pe server înainte de înregistrarea comenzii.
-            </p>
-          </div>
+          {isMobileSummaryOpen ? (
+            <div className="border-t border-neutral-200 px-4 pb-5">
+              <OrderSummaryContent
+                items={items}
+                subtotal={subtotal}
+                shippingCost={
+                  shippingCost
+                }
+                total={total}
+              />
 
-          {error ? (
-            <div
-              role="alert"
-              className="mt-5 border border-red-200 bg-red-50 px-4 py-3 font-barlow text-sm leading-6 text-red-700"
-            >
-              {error}
+              {error ? (
+                <ErrorMessage
+                  message={error}
+                />
+              ) : null}
             </div>
           ) : null}
+        </section>
+      </form>
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 px-3 pt-3 shadow-[0_-16px_45px_rgba(0,0,0,0.14)] backdrop-blur-xl lg:hidden"
+        style={{
+          paddingBottom:
+            "max(0.75rem, env(safe-area-inset-bottom))",
+        }}
+      >
+        {error ? (
+          <p
+            role="alert"
+            className="mx-auto mb-2 max-w-md truncate text-xs font-medium text-red-600"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mx-auto flex max-w-md items-center gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              setIsMobileSummaryOpen(true)
+            }
+            className="min-w-0 shrink-0 text-left"
+          >
+            <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500">
+              Total
+            </span>
+
+            <span className="font-condensed block text-xl font-bold leading-none text-[#111111]">
+              {formatPrice(total)}
+            </span>
+          </button>
 
           <button
             type="submit"
+            form="checkout-form"
             disabled={isSubmitting}
-            className="mt-6 inline-flex min-h-14 w-full items-center justify-center rounded-sm bg-[#ff5500] px-6 font-barlow-condensed text-lg font-bold uppercase tracking-wider text-white transition hover:bg-[#e64d00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5500] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="font-condensed flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold uppercase tracking-[0.08em] text-white shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting
-              ? "Se trimite comanda..."
-              : "Trimite comanda"}
+            {isSubmitting ? (
+              <>
+                <LoaderCircle className="size-5 animate-spin" />
+                Se trimite...
+              </>
+            ) : (
+              <>
+                <PackageCheck className="size-5" />
+                Trimite comanda
+              </>
+            )}
           </button>
+        </div>
+      </div>
 
-          <Link
-            href="/cos"
-            className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-sm border border-[#111111] px-6 font-barlow-condensed text-base font-bold uppercase tracking-wider text-[#111111] transition hover:bg-[#111111] hover:text-white"
-          >
-            Înapoi la coș
-          </Link>
-        </section>
-      </aside>
-    </form>
+      {activeLocationPicker ? (
+        <LocationPickerDialog
+          type={activeLocationPicker}
+          search={locationSearch}
+          selectedValue={
+            activeLocationPicker ===
+            "county"
+              ? formData.county
+              : formData.city
+          }
+          county={formData.county}
+          options={pickerOptions}
+          onSearchChange={
+            setLocationSearch
+          }
+          onSelect={selectLocation}
+          onClose={closeLocationPicker}
+        />
+      ) : null}
+    </>
   );
 }
 
-type SectionHeadingProps = {
+type CheckoutSectionProps = {
+  step: string;
   title: string;
   description?: string;
+  children: ReactNode;
 };
 
-function SectionHeading({
+function CheckoutSection({
+  step,
   title,
   description,
-}: SectionHeadingProps) {
+  children,
+}: CheckoutSectionProps) {
   return (
-    <div className="mb-5 border-b border-neutral-200 pb-4">
-      <h2 className="font-bebas-neue text-3xl uppercase tracking-wide text-[#111111]">
-        {title}
-      </h2>
+    <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-sm">
+      <header className="flex items-start gap-3 border-b border-neutral-200 px-4 py-4 sm:px-7 sm:py-5">
+        <span className="font-condensed flex size-8 shrink-0 items-center justify-center rounded-full bg-[#111111] text-xs font-bold text-primary">
+          {step}
+        </span>
 
-      {description ? (
-        <p className="mt-1 font-barlow text-sm text-neutral-600">
-          {description}
-        </p>
-      ) : null}
-    </div>
+        <div>
+          <h2 className="font-display text-2xl uppercase leading-none text-[#111111] sm:text-3xl">
+            {title}
+          </h2>
+
+          {description ? (
+            <p className="mt-1 text-sm leading-6 text-neutral-600">
+              {description}
+            </p>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="p-4 sm:p-7">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -884,15 +1333,20 @@ function FormField({
   children,
 }: FormFieldProps) {
   return (
-    <div className="space-y-2">
+    <div
+      data-checkout-field={id}
+      className="space-y-2"
+    >
       <label
         htmlFor={id}
-        className="block font-barlow-condensed text-sm font-semibold uppercase tracking-wider text-[#111111]"
+        className="font-condensed block text-xs font-bold uppercase tracking-[0.09em] text-[#111111] sm:text-sm"
       >
         {label}
 
         {required ? (
-          <span className="ml-1 text-[#ff5500]">*</span>
+          <span className="ml-1 text-primary">
+            *
+          </span>
         ) : null}
       </label>
 
@@ -902,11 +1356,436 @@ function FormField({
         <p
           id={`${id}-error`}
           role="alert"
-          className="text-sm text-red-600"
+          className="text-sm leading-5 text-red-600"
         >
           {error}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+type SearchableLocationFieldProps = {
+  id: LocationPickerType;
+  label: string;
+  value: string;
+  placeholder: string;
+  required?: boolean;
+  error?: string;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
+function SearchableLocationField({
+  id,
+  label,
+  value,
+  placeholder,
+  required = false,
+  error,
+  disabled = false,
+  onClick,
+}: SearchableLocationFieldProps) {
+  return (
+    <div className="space-y-2">
+      <label
+        htmlFor={`${id}-picker`}
+        className="font-condensed block text-xs font-bold uppercase tracking-[0.09em] text-[#111111] sm:text-sm"
+      >
+        {label}
+
+        {required ? (
+          <span className="ml-1 text-primary">
+            *
+          </span>
+        ) : null}
+      </label>
+
+      <button
+        id={`${id}-picker`}
+        type="button"
+        data-checkout-field={id}
+        disabled={disabled}
+        onClick={onClick}
+        aria-invalid={Boolean(error)}
+        aria-describedby={
+          error
+            ? `${id}-error`
+            : undefined
+        }
+        className={[
+          "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 text-left text-base outline-none transition focus:ring-2 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400 sm:rounded-sm",
+          error
+            ? "border-red-500 focus:border-red-500 focus:ring-red-500/15"
+            : "border-neutral-300 focus:border-primary focus:ring-primary/15",
+        ].join(" ")}
+      >
+        <span
+          className={
+            value
+              ? "truncate text-[#111111]"
+              : "truncate text-neutral-400"
+          }
+        >
+          {value || placeholder}
+        </span>
+
+        <ChevronDown className="size-4 shrink-0 text-neutral-500" />
+      </button>
+
+      {error ? (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="text-sm leading-5 text-red-600"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type LocationPickerDialogProps = {
+  type: LocationPickerType;
+  search: string;
+  selectedValue: string;
+  county: string;
+  options: string[];
+  onSearchChange: (
+    value: string,
+  ) => void;
+  onSelect: (
+    value: string,
+  ) => void;
+  onClose: () => void;
+};
+
+function LocationPickerDialog({
+  type,
+  search,
+  selectedValue,
+  county,
+  options,
+  onSearchChange,
+  onSelect,
+  onClose,
+}: LocationPickerDialogProps) {
+  const title =
+    type === "county"
+      ? "Selectează județul"
+      : "Selectează localitatea";
+
+  const placeholder =
+    type === "county"
+      ? "Caută județul..."
+      : "Caută localitatea...";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 backdrop-blur-sm sm:items-center sm:p-6"
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <section className="flex max-h-[88svh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[720px] sm:max-w-lg sm:rounded-2xl">
+        <header className="border-b border-neutral-200 px-4 pb-4 pt-3 sm:px-5 sm:pt-5">
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-neutral-300 sm:hidden" />
+
+          <div className="flex items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Închide"
+              className="flex size-10 items-center justify-center rounded-full bg-neutral-100 text-[#111111] transition active:scale-90"
+            >
+              <ChevronLeft className="size-5 sm:hidden" />
+              <X className="hidden size-5 sm:block" />
+            </button>
+
+            <div className="min-w-0 flex-1 text-center">
+              <h2 className="font-display text-2xl uppercase leading-none text-[#111111]">
+                {title}
+              </h2>
+
+              {type === "city" &&
+              county ? (
+                <p className="mt-1 truncate text-xs text-neutral-500">
+                  Județul {county}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="size-10" />
+          </div>
+
+          <div className="relative mt-4">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+
+            <input
+              type="search"
+              autoFocus
+              value={search}
+              onChange={(event) =>
+                onSearchChange(
+                  event.target.value,
+                )
+              }
+              placeholder={placeholder}
+              className="h-12 w-full rounded-xl border border-neutral-300 bg-neutral-50 pl-11 pr-10 text-base text-[#111111] outline-none transition placeholder:text-neutral-400 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
+            />
+
+            {search ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onSearchChange("")
+                }
+                aria-label="Șterge căutarea"
+                className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3">
+          {options.length > 0 ? (
+            <div className="space-y-1">
+              {options.map((option) => {
+                const isSelected =
+                  selectedValue === option;
+
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() =>
+                      onSelect(option)
+                    }
+                    className={[
+                      "flex min-h-12 w-full items-center justify-between gap-3 rounded-xl px-4 text-left text-[15px] transition active:scale-[0.99]",
+                      isSelected
+                        ? "bg-primary/[0.08] font-semibold text-primary"
+                        : "text-[#111111] hover:bg-neutral-100",
+                    ].join(" ")}
+                  >
+                    <span className="min-w-0 truncate">
+                      {option}
+                    </span>
+
+                    {isSelected ? (
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                        <Check className="size-3.5" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">
+              <MapPin className="size-7 text-neutral-400" />
+
+              <p className="mt-3 font-semibold text-[#111111]">
+                Niciun rezultat
+              </p>
+
+              <p className="mt-1 text-sm text-neutral-500">
+                Încearcă o altă căutare.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          className="border-t border-neutral-200 bg-white"
+          style={{
+            paddingBottom:
+              "env(safe-area-inset-bottom)",
+          }}
+        />
+      </section>
+    </div>
+  );
+}
+
+type OrderSummaryProps = {
+  items: ReturnType<
+    typeof useCartStore.getState
+  >["items"];
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+  error: string;
+  isSubmitting: boolean;
+};
+
+function OrderSummary({
+  items,
+  subtotal,
+  shippingCost,
+  total,
+  error,
+  isSubmitting,
+}: OrderSummaryProps) {
+  return (
+    <section className="overflow-hidden rounded-sm border border-neutral-200 bg-white shadow-sm">
+      <header className="border-b border-neutral-200 px-6 py-5">
+        <p className="font-condensed text-[10px] font-bold uppercase tracking-[0.15em] text-primary">
+          Verificare finală
+        </p>
+
+        <h2 className="font-display mt-1 text-3xl uppercase leading-none text-[#111111]">
+          Rezumat comandă
+        </h2>
+      </header>
+
+      <div className="px-6 pb-6">
+        <OrderSummaryContent
+          items={items}
+          subtotal={subtotal}
+          shippingCost={shippingCost}
+          total={total}
+        />
+
+        {error ? (
+          <ErrorMessage message={error} />
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="font-condensed mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-sm bg-primary px-6 text-base font-bold uppercase tracking-[0.08em] text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? (
+            <>
+              <LoaderCircle className="size-5 animate-spin" />
+              Se trimite comanda...
+            </>
+          ) : (
+            <>
+              <PackageCheck className="size-5" />
+              Trimite comanda
+            </>
+          )}
+        </button>
+
+        <Link
+          href="/cos"
+          className="font-condensed mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-sm border border-[#111111] px-6 text-sm font-bold uppercase tracking-[0.08em] text-[#111111] transition hover:bg-[#111111] hover:text-white"
+        >
+          Înapoi la coș
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+type OrderSummaryContentProps = {
+  items: ReturnType<
+    typeof useCartStore.getState
+  >["items"];
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+};
+
+function OrderSummaryContent({
+  items,
+  subtotal,
+  shippingCost,
+  total,
+}: OrderSummaryContentProps) {
+  return (
+    <>
+      <div className="divide-y divide-neutral-200">
+        {items.map((item) => (
+          <div
+            key={item.productId}
+            className="flex gap-4 py-4"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="font-condensed truncate text-sm font-bold uppercase tracking-[0.04em] text-[#111111]">
+                {item.name}
+              </p>
+
+              <p className="mt-1 text-xs text-neutral-500">
+                Cantitate: {item.quantity}
+              </p>
+            </div>
+
+            <p className="font-condensed shrink-0 text-base font-bold text-[#111111]">
+              {formatPrice(
+                Number(item.price) *
+                  item.quantity,
+              )}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-neutral-200 pt-5">
+        <div className="space-y-3">
+          <PriceRow
+            label="Subtotal"
+            value={formatPrice(subtotal)}
+          />
+
+          <PriceRow
+            label="Livrare"
+            value={
+              shippingCost === 0
+                ? "Gratuită"
+                : formatPrice(
+                    shippingCost,
+                  )
+            }
+          />
+        </div>
+
+        <div className="mt-5 flex items-end justify-between gap-4 border-t border-neutral-200 pt-5">
+          <span className="font-condensed text-base font-bold uppercase tracking-[0.06em] text-[#111111]">
+            Total
+          </span>
+
+          <span className="font-condensed text-2xl font-bold text-[#111111]">
+            {formatPrice(total)}
+          </span>
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-neutral-500">
+          {shippingCost === 0
+            ? "Comanda beneficiază de livrare gratuită."
+            : `Livrare gratuită pentru comenzi de minimum ${formatPrice(
+                FREE_SHIPPING_THRESHOLD,
+              )}.`}
+        </p>
+      </div>
+    </>
+  );
+}
+
+function ErrorMessage({
+  message,
+}: {
+  message: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700 sm:rounded-sm"
+    >
+      {message}
     </div>
   );
 }
@@ -922,12 +1801,32 @@ function PriceRow({
 }: PriceRowProps) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="font-barlow text-neutral-600">
+      <span className="text-sm text-neutral-600">
         {label}
       </span>
 
-      <span className="font-barlow-condensed text-lg font-bold text-[#111111]">
+      <span className="font-condensed text-lg font-bold text-[#111111]">
         {value}
+      </span>
+    </div>
+  );
+}
+
+type CheckoutTrustItemProps = {
+  icon: typeof ShieldCheck;
+  label: string;
+};
+
+function CheckoutTrustItem({
+  icon: Icon,
+  label,
+}: CheckoutTrustItemProps) {
+  return (
+    <div className="flex min-h-20 flex-col items-center justify-center rounded-xl border border-neutral-200 bg-white px-2 text-center shadow-sm sm:rounded-sm">
+      <Icon className="size-5 text-primary" />
+
+      <span className="font-condensed mt-2 text-[9px] font-bold uppercase leading-4 tracking-[0.05em] text-neutral-600 sm:text-[10px]">
+        {label}
       </span>
     </div>
   );
