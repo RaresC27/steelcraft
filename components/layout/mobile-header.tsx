@@ -23,6 +23,10 @@ const navigationItems = [
         href: "/contact",
         label: "Contact",
     },
+    {
+        href: "/la-comanda",
+        label: "Confecții la comandă",
+    }
 ];
 
 export function MobileHeader() {

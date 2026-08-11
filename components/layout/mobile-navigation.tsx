@@ -36,7 +36,7 @@ const navigationItems = [
     },
     {
         label: "Confecții la comandă",
-        href: "/confectii-la-comanda",
+        href: "/la-comanda",
     },
     {
         label: "Despre noi",
