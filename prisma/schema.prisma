@@ -160,6 +160,72 @@ model ProductImage {
   @@index([productId, position])
 }
 
+model CustomProjectRequest {
+  id Int @id @default(autoincrement())
+
+  requestNumber String @unique
+
+  projectType String
+  material    String?
+  finish      String?
+  usage       String?
+
+  lengthValue   Decimal?
+  widthValue    Decimal?
+  heightValue   Decimal?
+  dimensionUnit String?
+
+  quantity Int?
+
+  needsRecommendation Boolean @default(false)
+
+  customerName String
+  email        String
+  phone        String
+
+  company   String?
+  vatNumber String?
+
+  county String?
+  city   String?
+
+  notes String?
+
+  status CustomProjectStatus @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files CustomProjectFile[]
+
+  @@index([requestNumber])
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@index([projectType])
+}
+
+model CustomProjectFile {
+  id Int @id @default(autoincrement())
+
+  url      String
+  pathname String? @unique
+
+  fileName String
+  mimeType String?
+  size     Int?
+
+  position Int @default(0)
+
+  requestId Int
+  request   CustomProjectRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId])
+  @@index([requestId, position])
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -185,5 +251,14 @@ enum ContactMessageStatus {
   NEW
   READ
   ANSWERED
+  ARCHIVED
+}
+
+enum CustomProjectStatus {
+  NEW
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  REJECTED
   ARCHIVED
 }
