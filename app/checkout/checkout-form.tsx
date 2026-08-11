@@ -34,6 +34,8 @@ import {
 } from "@/lib/commerce/shipping";
 import {
   getCitiesByCounty,
+  isValidRomaniaCounty,
+  isValidRomaniaLocation,
   romaniaCounties,
 } from "@/lib/romania-locations";
 import { checkoutSchema } from "@/lib/validation/checkout";
@@ -91,6 +93,18 @@ const initialFormData: CheckoutFormData = {
   postalCode: "",
   notes: "",
   paymentMethod: "CASH_ON_DELIVERY",
+};
+
+const CHECKOUT_DRAFT_KEY = "steelcraft-checkout-draft-v1";
+
+const CHECKOUT_DRAFT_TTL = 7 * 24 * 60 * 60 * 1000;
+
+const CHECKOUT_DRAFT_SAVE_DELAY = 400;
+
+type CheckoutDraft = {
+  version: 1;
+  savedAt: number;
+  data: Partial<CheckoutFormData>;
 };
 
 const inputBaseClassName =
@@ -177,6 +191,80 @@ const normalizedCounties = toNormalizedOptions(
   romaniaCounties.map((county) => county.name),
 );
 
+function clearCheckoutDraft() {
+  try {
+    window.localStorage.removeItem(CHECKOUT_DRAFT_KEY);
+  } catch {
+    // Checkout-ul trebuie să funcționeze și când storage-ul este indisponibil.
+  }
+}
+
+function readCheckoutDraft(): Partial<CheckoutFormData> | null {
+  try {
+    const rawDraft = window.localStorage.getItem(CHECKOUT_DRAFT_KEY);
+
+    if (!rawDraft) {
+      return null;
+    }
+
+    const parsedDraft = JSON.parse(rawDraft) as CheckoutDraft;
+
+    if (
+      parsedDraft.version !== 1 ||
+      typeof parsedDraft.savedAt !== "number" ||
+      !parsedDraft.data
+    ) {
+      clearCheckoutDraft();
+      return null;
+    }
+
+    if (Date.now() - parsedDraft.savedAt > CHECKOUT_DRAFT_TTL) {
+      clearCheckoutDraft();
+      return null;
+    }
+
+    const restoredData: Partial<CheckoutFormData> = {
+      ...parsedDraft.data,
+      paymentMethod: "CASH_ON_DELIVERY",
+    };
+
+    if (
+      restoredData.county &&
+      !isValidRomaniaCounty(restoredData.county)
+    ) {
+      restoredData.county = "";
+      restoredData.city = "";
+    }
+
+    if (
+      restoredData.county &&
+      restoredData.city &&
+      !isValidRomaniaLocation(restoredData.county, restoredData.city)
+    ) {
+      restoredData.city = "";
+    }
+
+    return restoredData;
+  } catch {
+    clearCheckoutDraft();
+    return null;
+  }
+}
+
+function hasMeaningfulCheckoutData(data: CheckoutFormData) {
+  return Boolean(
+    data.customerName.trim() ||
+      data.email.trim() ||
+      data.phone.trim() ||
+      data.company.trim() ||
+      data.vatNumber.trim() ||
+      data.county.trim() ||
+      data.city.trim() ||
+      data.address.trim() ||
+      data.postalCode.trim(),
+  );
+}
+
 /**
  * Tracks the actual visible viewport height via the VisualViewport API.
  * This is the only reliable cross-browser way to know how much space is
@@ -237,8 +325,60 @@ export function CheckoutForm() {
   const [isMobileSummaryOpen, setIsMobileSummaryOpen] = useState(false);
 
   useEffect(() => {
+    const savedDraft = readCheckoutDraft();
+
+    if (savedDraft) {
+      setFormData((currentData) => ({
+        ...currentData,
+        ...savedDraft,
+      }));
+    }
+
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isMounted || isSubmitting) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!hasMeaningfulCheckoutData(formData)) {
+        clearCheckoutDraft();
+        return;
+      }
+
+      const draft: CheckoutDraft = {
+        version: 1,
+        savedAt: Date.now(),
+        data: {
+          customerName: formData.customerName,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          vatNumber: formData.vatNumber,
+          county: formData.county,
+          city: formData.city,
+          address: formData.address,
+          postalCode: formData.postalCode,
+          paymentMethod: "CASH_ON_DELIVERY",
+        },
+      };
+
+      try {
+        window.localStorage.setItem(
+          CHECKOUT_DRAFT_KEY,
+          JSON.stringify(draft),
+        );
+      } catch {
+        // Nu blocăm checkout-ul dacă localStorage nu poate fi folosit.
+      }
+    }, CHECKOUT_DRAFT_SAVE_DELAY);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [formData, isMounted, isSubmitting]);
 
   useEffect(() => {
     if (!activeLocationPicker) {
@@ -462,6 +602,7 @@ export function CheckoutForm() {
           throw new Error("Serverul nu a returnat informațiile comenzii.");
         }
 
+        clearCheckoutDraft();
         clearCart();
 
         router.push(
@@ -1098,8 +1239,11 @@ const LocationPickerDialog = memo(function LocationPickerDialog({
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: 0 });
-  }, [options]);
+    listRef.current?.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  }, [search, type]);
 
   const title = type === "county" ? "Selectează județul" : "Selectează localitatea";
   const placeholder = type === "county" ? "Caută județul..." : "Caută localitatea...";

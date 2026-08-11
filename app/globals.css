@@ -279,3 +279,21 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes successPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-pop {
+  animation: successPop 320ms
+    cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+}

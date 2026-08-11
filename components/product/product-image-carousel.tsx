@@ -37,12 +37,6 @@ export function ProductImageCarousel({
   const [selectedIndex, setSelectedIndex] =
     useState(0);
 
-  const [canScrollPrev, setCanScrollPrev] =
-    useState(false);
-
-  const [canScrollNext, setCanScrollNext] =
-    useState(false);
-
   const updateCarouselState =
     useCallback(() => {
       if (!emblaApi) {
@@ -51,14 +45,6 @@ export function ProductImageCarousel({
 
       setSelectedIndex(
         emblaApi.selectedScrollSnap(),
-      );
-
-      setCanScrollPrev(
-        emblaApi.canScrollPrev(),
-      );
-
-      setCanScrollNext(
-        emblaApi.canScrollNext(),
       );
     }, [emblaApi]);
 
@@ -142,9 +128,9 @@ export function ProductImageCarousel({
                     src={image.url}
                     alt={image.alt}
                     fill
-                    priority={index === 0}
+                    preload={index === 0}
+                    sizes="(max-width: 639px) 100vw, (max-width: 1023px) 100vw, 50vw"
                     className="select-none object-cover"
-                    sizes="(max-width: 639px) 100vw, (min-width: 1024px) 50vw, 100vw"
                     draggable={false}
                   />
                 </div>
@@ -171,12 +157,8 @@ export function ProductImageCarousel({
             <button
               type="button"
               onClick={scrollPrev}
-              disabled={
-                !canScrollPrev &&
-                images.length <= 1
-              }
               aria-label="Imaginea anterioară"
-              className="absolute left-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
+              className="absolute left-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary sm:flex"
             >
               <ChevronLeft className="size-5" />
             </button>
@@ -184,12 +166,8 @@ export function ProductImageCarousel({
             <button
               type="button"
               onClick={scrollNext}
-              disabled={
-                !canScrollNext &&
-                images.length <= 1
-              }
               aria-label="Imaginea următoare"
-              className="absolute right-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
+              className="absolute right-4 top-1/2 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-white shadow-lg backdrop-blur-md transition hover:bg-primary sm:flex"
             >
               <ChevronRight className="size-5" />
             </button>
@@ -228,14 +206,10 @@ export function ProductImageCarousel({
                     src={image.url}
                     alt=""
                     fill
-                    className="object-cover"
                     sizes="80px"
+                    className="object-cover"
                     draggable={false}
                   />
-
-                  {isActive ? (
-                    <span className="absolute inset-x-1 bottom-1 h-0.5 rounded-full bg-primary sm:hidden" />
-                  ) : null}
                 </button>
               );
             },

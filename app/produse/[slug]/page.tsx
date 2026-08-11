@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { MobileProductPurchaseBar } from "@/components/product/mobile-product-purchase-bar";
@@ -14,12 +15,15 @@ type ProductPageProps = {
   }>;
 };
 
-export async function generateMetadata({
-  params,
-}: ProductPageProps): Promise<Metadata> {
-  const { slug } = await params;
-
-  const product = await prisma.product.findFirst({
+/*
+ * React cache deduplică același query în cadrul
+ * aceluiași request Next.js.
+ *
+ * Astfel generateMetadata() și pagina nu mai
+ * lovesc baza separat pentru același produs.
+ */
+const getProduct = cache(async (slug: string) => {
+  return prisma.product.findFirst({
     where: {
       slug,
       isActive: true,
@@ -27,12 +31,56 @@ export async function generateMetadata({
         isActive: true,
       },
     },
+
     select: {
+      id: true,
       name: true,
+      slug: true,
       shortDescription: true,
+      description: true,
+      material: true,
+      price: true,
+      priceLabel: true,
+      stock: true,
+      canBePurchased: true,
+      categoryId: true,
       image: true,
 
+      category: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+
+      specifications: {
+        select: {
+          id: true,
+          label: true,
+          value: true,
+          position: true,
+        },
+
+        orderBy: [
+          {
+            position: "asc",
+          },
+          {
+            id: "asc",
+          },
+        ],
+      },
+
       images: {
+        select: {
+          id: true,
+          url: true,
+          alt: true,
+          position: true,
+          isPrimary: true,
+        },
+
         orderBy: [
           {
             isPrimary: "desc",
@@ -44,13 +92,72 @@ export async function generateMetadata({
             id: "asc",
           },
         ],
-        take: 1,
-        select: {
-          url: true,
-        },
       },
     },
   });
+});
+
+const getRelatedProducts = cache(
+  async (
+    categoryId: number,
+    productId: number,
+  ) => {
+    return prisma.product.findMany({
+      where: {
+        isActive: true,
+
+        category: {
+          isActive: true,
+        },
+
+        categoryId,
+
+        id: {
+          not: productId,
+        },
+      },
+
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        shortDescription: true,
+        material: true,
+        priceLabel: true,
+        image: true,
+
+        category: {
+          select: {
+            name: true,
+            slug: true,
+          },
+        },
+      },
+
+      orderBy: [
+        {
+          featured: "desc",
+        },
+        {
+          position: "asc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+
+      take: 3,
+    });
+  },
+);
+
+export async function generateMetadata({
+  params,
+}: ProductPageProps): Promise<Metadata> {
+  const { slug } = await params;
+
+  const product =
+    await getProduct(slug);
 
   if (!product) {
     return {
@@ -66,11 +173,13 @@ export async function generateMetadata({
 
   return {
     title: product.name,
-    description: product.shortDescription,
+    description:
+      product.shortDescription,
 
     openGraph: {
       title: product.name,
-      description: product.shortDescription,
+      description:
+        product.shortDescription,
 
       images: metadataImage
         ? [
@@ -90,48 +199,22 @@ export default async function ProductPage({
   const { slug } = await params;
 
   const product =
-    await prisma.product.findFirst({
-      where: {
-        slug,
-        isActive: true,
-        category: {
-          isActive: true,
-        },
-      },
-
-      include: {
-        category: true,
-
-        specifications: {
-          orderBy: [
-            {
-              position: "asc",
-            },
-            {
-              id: "asc",
-            },
-          ],
-        },
-
-        images: {
-          orderBy: [
-            {
-              isPrimary: "desc",
-            },
-            {
-              position: "asc",
-            },
-            {
-              id: "asc",
-            },
-          ],
-        },
-      },
-    });
+    await getProduct(slug);
 
   if (!product) {
     notFound();
   }
+
+  /*
+   * Acest query poate porni imediat după ce avem
+   * categoryId-ul produsului. Selectăm doar datele
+   * necesare ProductCard-ului.
+   */
+  const relatedProductsPromise =
+    getRelatedProducts(
+      product.categoryId,
+      product.id,
+    );
 
   const numericPrice =
     product.price !== null
@@ -146,23 +229,17 @@ export default async function ProductPage({
     numericPrice !== null &&
     numericPrice >= 0;
 
-  /*
-   * Dacă produsul are imagini în ProductImage,
-   * carouselul le folosește în ordinea:
-   * principală → position → id.
-   *
-   * Pentru produsele vechi fără galerie,
-   * folosim câmpul Product.image.
-   */
   const carouselImages =
     product.images.length > 0
-      ? product.images.map((image) => ({
-          id: image.id,
-          url: image.url,
-          alt:
-            image.alt?.trim() ||
-            product.name,
-        }))
+      ? product.images.map(
+          (image) => ({
+            id: image.id,
+            url: image.url,
+            alt:
+              image.alt?.trim() ||
+              product.name,
+          }),
+        )
       : product.image
         ? [
             {
@@ -173,52 +250,14 @@ export default async function ProductPage({
           ]
         : [];
 
-  /*
-   * Imaginea folosită în coș este cea
-   * principală din galerie sau fallback-ul vechi.
-   */
   const primaryProductImage =
     carouselImages[0]?.url ?? null;
 
   const relatedProducts =
-    await prisma.product.findMany({
-      where: {
-        isActive: true,
-
-        category: {
-          isActive: true,
-        },
-
-        categoryId:
-          product.categoryId,
-
-        id: {
-          not: product.id,
-        },
-      },
-
-      include: {
-        category: true,
-      },
-
-      orderBy: [
-        {
-          featured: "desc",
-        },
-        {
-          position: "asc",
-        },
-        {
-          createdAt: "desc",
-        },
-      ],
-
-      take: 3,
-    });
+    await relatedProductsPromise;
 
   return (
     <main className="min-h-screen bg-neutral-100 pb-28 lg:pb-0">
-      {/* Breadcrumb */}
       <section className="border-b border-neutral-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
           <nav
@@ -227,6 +266,7 @@ export default async function ProductPage({
           >
             <Link
               href="/"
+              prefetch
               className="shrink-0 transition hover:text-primary"
             >
               Acasă
@@ -238,6 +278,7 @@ export default async function ProductPage({
 
             <Link
               href="/produse"
+              prefetch
               className="shrink-0 transition hover:text-primary"
             >
               Produse
@@ -248,7 +289,14 @@ export default async function ProductPage({
             </span>
 
             <Link
-              href={`/produse?category=${product.category.slug}`}
+              href={{
+                pathname: "/produse",
+                query: {
+                  category:
+                    product.category.slug,
+                },
+              }}
+              prefetch
               className="shrink-0 transition hover:text-primary"
             >
               {product.category.name}
@@ -268,7 +316,6 @@ export default async function ProductPage({
         </div>
       </section>
 
-      {/* Informații principale */}
       <section className="bg-white">
         <div className="mx-auto grid max-w-7xl gap-7 px-3 py-5 sm:px-6 sm:py-10 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-20">
           <ProductImageCarousel
@@ -285,7 +332,9 @@ export default async function ProductPage({
             </h1>
 
             <p className="mt-4 text-[15px] leading-7 text-neutral-600 sm:mt-6 sm:text-base sm:leading-8">
-              {product.shortDescription}
+              {
+                product.shortDescription
+              }
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3 border-y border-neutral-200 py-5 sm:mt-8 sm:gap-4 sm:py-6">
@@ -337,10 +386,6 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            {/*
-             * Butonul normal apare pe desktop.
-             * Pe mobil folosim bara sticky.
-             */}
             <div className="mt-8 hidden flex-wrap items-center gap-4 lg:flex">
               {canAddToCart &&
               numericPrice !== null ? (
@@ -361,6 +406,7 @@ export default async function ProductPage({
               ) : (
                 <Link
                   href={`/contact?product=${product.slug}`}
+                  prefetch
                   className="inline-flex min-h-12 items-center justify-center rounded-sm bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   Solicită o ofertă
@@ -372,6 +418,7 @@ export default async function ProductPage({
               <div className="mt-6 lg:hidden">
                 <Link
                   href={`/contact?product=${product.slug}`}
+                  prefetch
                   className="font-condensed flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold uppercase tracking-[0.08em] text-white shadow-lg transition active:scale-[0.98]"
                 >
                   Solicită o ofertă
@@ -382,7 +429,6 @@ export default async function ProductPage({
         </div>
       </section>
 
-      {/* Descriere și specificații */}
       <section className="border-t border-neutral-200">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.3fr_0.7fr] lg:gap-12 lg:px-8 lg:py-20">
           <div>
@@ -432,15 +478,15 @@ export default async function ProductPage({
               </dl>
             ) : (
               <p className="mt-5 text-sm leading-7 text-neutral-600">
-                Specificațiile acestui produs vor
-                fi adăugate în curând.
+                Specificațiile acestui
+                produs vor fi adăugate în
+                curând.
               </p>
             )}
           </div>
         </div>
       </section>
 
-      {/* Produse similare */}
       {relatedProducts.length > 0 ? (
         <section className="border-t border-neutral-200 bg-white">
           <div className="mx-auto max-w-7xl px-3 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
