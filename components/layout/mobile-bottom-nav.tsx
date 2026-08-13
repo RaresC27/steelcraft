@@ -14,8 +14,8 @@ import {
   useState,
 } from "react";
 
-import { useCartStore } from "@/app/stores/cart-store";
 import { CART_ITEM_ADDED_EVENT } from "@/lib/cart-events";
+import { useCartStore } from "@/app/stores/cart-store";
 
 const navigationItems = [
   {
@@ -48,15 +48,8 @@ export function MobileBottomNav() {
     (state) => state.items,
   );
 
-  const [
-    cartAnimationKey,
-    setCartAnimationKey,
-  ] = useState(0);
-
-  const [
-    isFooterVisible,
-    setIsFooterVisible,
-  ] = useState(false);
+  const [cartAnimationKey, setCartAnimationKey] =
+    useState(0);
 
   const cartItemsCount = useMemo(
     () =>
@@ -88,42 +81,6 @@ export function MobileBottomNav() {
     };
   }, []);
 
-  useEffect(() => {
-    const footer =
-      document.getElementById(
-        "site-footer",
-      );
-
-    if (!footer) {
-      return;
-    }
-
-    const observer =
-      new IntersectionObserver(
-        ([entry]) => {
-          setIsFooterVisible(
-            entry.isIntersecting,
-          );
-        },
-        {
-          /*
-           * Bara începe să dispară puțin înainte
-           * ca footer-ul să ocupe mult din ecran.
-           */
-          root: null,
-          threshold: 0,
-          rootMargin:
-            "0px 0px 80px 0px",
-        },
-      );
-
-    observer.observe(footer);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [pathname]);
-
   const shouldHide =
     pathname.startsWith("/admin") ||
     pathname === "/checkout" ||
@@ -138,104 +95,85 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Navigație mobilă"
-      aria-hidden={
-        isFooterVisible
-          ? "true"
-          : undefined
-      }
-      className={[
-        "fixed inset-x-0 bottom-0 z-50 px-2 pt-2 backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out lg:hidden",
-        "bg-[#0a0a0a]/94 shadow-[0_-10px_35px_rgba(0,0,0,0.22)]",
-        isFooterVisible
-          ? "pointer-events-none translate-y-full opacity-0"
-          : "translate-y-0 opacity-100",
-      ].join(" ")}
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#111111]/95 px-2 pt-2 shadow-[0_-12px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl lg:hidden"
       style={{
         paddingBottom:
           "max(0.5rem, env(safe-area-inset-bottom))",
       }}
     >
       <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
-        {navigationItems.map(
-          (item) => {
-            const Icon = item.icon;
+        {navigationItems.map((item) => {
+          const Icon = item.icon;
 
-            const active = item.exact
-              ? pathname === item.href
-              : pathname.startsWith(
-                  item.href,
-                );
+          const active = item.exact
+            ? pathname === item.href
+            : pathname.startsWith(
+                item.href,
+              );
 
-            const isCart =
-              item.href === "/cos";
+          const isCart =
+            item.href === "/cos";
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={
-                  active
-                    ? "page"
-                    : undefined
-                }
-                tabIndex={
-                  isFooterVisible
-                    ? -1
-                    : undefined
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={
+                active ? "page" : undefined
+              }
+              className={[
+                "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 transition-all duration-200 active:scale-95",
+                active
+                  ? "bg-white/10 text-primary"
+                  : "text-neutral-400 active:bg-white/[0.07]",
+              ].join(" ")}
+            >
+              {active ? (
+                <span className="absolute top-0 h-0.5 w-7 rounded-full bg-primary shadow-[0_0_12px_rgba(234,88,12,0.75)]" />
+              ) : null}
+
+              <span
+                key={
+                  isCart
+                    ? cartAnimationKey
+                    : item.href
                 }
                 className={[
-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 transition duration-200 active:scale-95",
-                  active
-                    ? "bg-white/[0.08] text-primary"
-                    : "text-neutral-400 active:bg-white/[0.06]",
+                  "relative",
+                  isCart &&
+                  cartAnimationKey > 0
+                    ? "animate-cart-nav-pop"
+                    : "",
                 ].join(" ")}
               >
-                <span
-                  key={
-                    isCart
-                      ? cartAnimationKey
-                      : item.href
-                  }
+                <Icon
                   className={[
-                    "relative",
-                    isCart &&
-                    cartAnimationKey > 0
-                      ? "animate-cart-nav-pop"
+                    "size-5 transition-transform duration-200",
+                    active
+                      ? "stroke-[2.5]"
                       : "",
                   ].join(" ")}
-                >
-                  <Icon
-                    className={[
-                      "size-5 transition-transform duration-200",
-                      active
-                        ? "stroke-[2.4]"
-                        : "",
-                    ].join(" ")}
-                  />
+                />
 
-                  {isCart &&
-                  cartItemsCount > 0 ? (
-                    <span
-                      key={
-                        cartItemsCount
-                      }
-                      className="animate-cart-badge absolute -right-3.5 -top-2.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-black leading-none text-white shadow-[0_4px_12px_rgba(255,85,0,0.3)]"
-                    >
-                      {cartItemsCount >
-                      99
-                        ? "99+"
-                        : cartItemsCount}
-                    </span>
-                  ) : null}
-                </span>
+                {isCart &&
+                cartItemsCount > 0 ? (
+                  <span
+                    key={cartItemsCount}
+                    className="animate-cart-badge absolute -right-3.5 -top-2.5 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-primary px-1 text-[10px] font-black leading-none text-white shadow-lg"
+                  >
+                    {cartItemsCount > 99
+                      ? "99+"
+                      : cartItemsCount}
+                  </span>
+                ) : null}
+              </span>
 
-                <span className="font-condensed text-[11px] font-bold uppercase tracking-[0.04em]">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          },
-        )}
+              <span className="font-condensed text-[11px] font-bold uppercase tracking-[0.05em]">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );
