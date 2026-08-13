@@ -9,11 +9,11 @@ import {
   Bebas_Neue,
 } from "next/font/google";
 
-import { MobileCartToast } from "@/components/cart/mobile-cart-toast";
+import { SiteHeader } from "@/components/layout/site-header";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { MobileHeader } from "@/components/layout/mobile-header";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { MobileCartToast } from "@/components/cart/mobile-cart-toast";
 
 import "./globals.css";
 
@@ -47,11 +47,9 @@ const bebasNeue = Bebas_Neue({
 
 export const metadata: Metadata = {
   title: {
-    default:
-      "SteelCraft | Confecții metalice la comandă",
+    default: "SteelCraft | Confecții metalice la comandă",
     template: "%s | SteelCraft",
   },
-
   description:
     "Hrănitoare pentru animale și confecții metalice realizate din tablă și inox, în dimensiuni standard sau la comandă.",
 };
@@ -62,32 +60,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="ro"
-      className={[
-        barlow.variable,
-        barlowCondensed.variable,
-        bebasNeue.variable,
-        "bg-[#0a0a0a]",
-      ].join(" ")}
-    >
-      <body className="min-h-screen bg-[#0a0a0a] antialiased">
-        <div className="min-h-screen bg-white">
-          <div className="hidden lg:block">
-            <SiteHeader />
-          </div>
-
-          <MobileHeader />
-
-          <div className="min-h-screen pb-24 lg:pb-0">
-            {children}
-          </div>
-
-          <SiteFooter />
-
-          <MobileCartToast />
-          <MobileBottomNav />
+    <html lang="ro">
+      <body>
+        <div className="hidden lg:block">
+          <SiteHeader />
         </div>
+
+        <MobileHeader />
+
+        <div className="min-h-screen pb-24 lg:pb-0">
+          {children}
+        </div>
+
+        <SiteFooter />
+
+        <MobileCartToast />
+        <MobileBottomNav />
       </body>
     </html>
   );
