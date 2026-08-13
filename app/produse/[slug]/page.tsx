@@ -7,6 +7,7 @@ import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { MobileProductPurchaseBar } from "@/components/product/mobile-product-purchase-bar";
 import { ProductCard } from "@/components/product/product-card";
 import { ProductImageCarousel } from "@/components/product/product-image-carousel";
+import { ProductWhatsAppButton } from "@/components/product/product-whatsapp-button";
 import { prisma } from "@/lib/prisma";
 
 type ProductPageProps = {
@@ -205,11 +206,6 @@ export default async function ProductPage({
     notFound();
   }
 
-  /*
-   * Acest query poate porni imediat după ce avem
-   * categoryId-ul produsului. Selectăm doar datele
-   * necesare ProductCard-ului.
-   */
   const relatedProductsPromise =
     getRelatedProducts(
       product.categoryId,
@@ -386,7 +382,8 @@ export default async function ProductPage({
               </div>
             ) : null}
 
-            <div className="mt-8 hidden flex-wrap items-center gap-4 lg:flex">
+            {/* Desktop CTA */}
+            <div className="mt-8 hidden flex-wrap items-center gap-3 lg:flex">
               {canAddToCart &&
               numericPrice !== null ? (
                 <AddToCartButton
@@ -407,15 +404,21 @@ export default async function ProductPage({
                 <Link
                   href={`/contact?product=${product.slug}`}
                   prefetch
-                  className="inline-flex min-h-12 items-center justify-center rounded-sm bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="font-condensed inline-flex min-h-12 items-center justify-center rounded-sm bg-primary px-6 py-3 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   Solicită o ofertă
                 </Link>
               )}
+
+              <ProductWhatsAppButton
+                productName={product.name}
+                productSlug={product.slug}
+              />
             </div>
 
-            {!canAddToCart ? (
-              <div className="mt-6 lg:hidden">
+            {/* Mobile CTA */}
+            <div className="mt-6 lg:hidden">
+              {!canAddToCart ? (
                 <Link
                   href={`/contact?product=${product.slug}`}
                   prefetch
@@ -423,8 +426,32 @@ export default async function ProductPage({
                 >
                   Solicită o ofertă
                 </Link>
+              ) : null}
+
+              <div
+                className={
+                  !canAddToCart
+                    ? "mt-3"
+                    : ""
+                }
+              >
+                <p className="mb-3 text-sm leading-6 text-neutral-500">
+                  Ai nevoie de alte
+                  dimensiuni sau vrei mai
+                  multe informații despre
+                  produs?
+                </p>
+
+                <ProductWhatsAppButton
+                  productName={
+                    product.name
+                  }
+                  productSlug={
+                    product.slug
+                  }
+                />
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </section>

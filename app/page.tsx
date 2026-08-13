@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Container } from "@/components/layout/container";
 import { Section } from "@/components/layout/section";
 import { ProductCard } from "@/components/product/product-card";
+import { HomeFaq } from "@/components/sections/home-faq";
 import { HomeHero } from "@/components/sections/home-hero";
 import { ProductCategoriesSection } from "@/components/sections/product-categories-section";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,7 +85,7 @@ export default async function HomePage() {
       <ProductCategoriesSection />
 
       {featuredProducts.length > 0 ? (
-        <section className="border-y border-neutral-200 bg-neutral-100 py-12 sm:py-16 lg:py-20">
+        <section className="bg-neutral-100 py-12 sm:py-16 lg:py-20">
           <Container>
             <div className="flex items-end justify-between gap-5">
               <div>
@@ -105,7 +106,6 @@ export default async function HomePage() {
 
               <Link
                 href="/produse"
-                prefetch
                 className="font-condensed hidden shrink-0 items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-primary transition hover:gap-3 sm:flex"
               >
                 Vezi toate
@@ -149,7 +149,6 @@ export default async function HomePage() {
 
             <Link
               href="/produse"
-              prefetch
               className="font-condensed mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#111111] px-5 text-sm font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98] sm:hidden"
             >
               Vezi toate produsele
@@ -159,7 +158,7 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <Section>
+      <Section className="bg-white">
         <Container>
           <SectionHeading
             accent="SteelCraft?"
@@ -199,6 +198,8 @@ export default async function HomePage() {
           </div>
         </Container>
       </Section>
+
+      <HomeFaq />
     </main>
   );
 }
