@@ -68,6 +68,10 @@ export function MobileBottomNav() {
     [items],
   );
 
+  /*
+   * Animația coșului când este adăugat
+   * un produs.
+   */
   useEffect(() => {
     function animateCart() {
       setCartAnimationKey(
@@ -88,6 +92,13 @@ export function MobileBottomNav() {
     };
   }, []);
 
+  /*
+   * Ascundem bottom nav-ul atunci când
+   * footer-ul începe să intre în ecran.
+   *
+   * Astfel footer-ul poate fi văzut complet
+   * și nu rămâne nimic peste linkurile lui.
+   */
   useEffect(() => {
     const footer =
       document.getElementById(
@@ -95,6 +106,7 @@ export function MobileBottomNav() {
       );
 
     if (!footer) {
+      setIsFooterVisible(false);
       return;
     }
 
@@ -106,14 +118,16 @@ export function MobileBottomNav() {
           );
         },
         {
-          /*
-           * Bara începe să dispară puțin înainte
-           * ca footer-ul să ocupe mult din ecran.
-           */
           root: null,
           threshold: 0,
+
+          /*
+           * Bara începe să dispară puțin
+           * înainte ca footer-ul să ajungă
+           * efectiv sub ea.
+           */
           rootMargin:
-            "0px 0px 80px 0px",
+            "0px 0px 72px 0px",
         },
       );
 
@@ -129,6 +143,9 @@ export function MobileBottomNav() {
     pathname === "/checkout" ||
     pathname.startsWith(
       "/comanda-finalizata",
+    ) ||
+    pathname.startsWith(
+      "/la-comanda/multumim",
     );
 
   if (shouldHide) {
@@ -144,15 +161,45 @@ export function MobileBottomNav() {
           : undefined
       }
       className={[
-        "fixed inset-x-0 bottom-0 z-50 px-2 pt-2 backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out lg:hidden",
-        "bg-[#0a0a0a]/94 shadow-[0_-10px_35px_rgba(0,0,0,0.22)]",
+        /*
+         * Background solid, nu transparent.
+         *
+         * Important mai ales pe iPhone pentru
+         * ca zona safe-area să aibă exact
+         * aceeași culoare până jos.
+         */
+        "fixed inset-x-0 bottom-0 z-50 bg-[#0a0a0a] lg:hidden",
+
+        /*
+         * Safe spacing în partea de sus.
+         */
+        "px-2 pt-2",
+
+        /*
+         * Umbra este doar în partea superioară.
+         */
+        "shadow-[0_-10px_32px_rgba(0,0,0,0.22)]",
+
+        /*
+         * Tranziție când intrăm în footer.
+         */
+        "will-change-transform transition-[transform,opacity] duration-300 ease-out",
+
         isFooterVisible
-          ? "pointer-events-none translate-y-full opacity-0"
+          ? "pointer-events-none translate-y-[110%] opacity-0"
           : "translate-y-0 opacity-100",
       ].join(" ")}
       style={{
+        /*
+         * Pe iPhone această zonă include
+         * Home Indicator-ul.
+         *
+         * Background-ul nav-ului acoperă
+         * inclusiv padding-ul, deci culoarea
+         * #0a0a0a continuă până jos.
+         */
         paddingBottom:
-          "max(0.5rem, env(safe-area-inset-bottom))",
+          "max(0.55rem, env(safe-area-inset-bottom))",
       }}
     >
       <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
@@ -161,7 +208,8 @@ export function MobileBottomNav() {
             const Icon = item.icon;
 
             const active = item.exact
-              ? pathname === item.href
+              ? pathname ===
+                item.href
               : pathname.startsWith(
                   item.href,
                 );
@@ -184,7 +232,10 @@ export function MobileBottomNav() {
                     : undefined
                 }
                 className={[
-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 transition duration-200 active:scale-95",
+                  "relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-2",
+                  "transition-[background-color,color,transform] duration-200",
+                  "active:scale-[0.96]",
+
                   active
                     ? "bg-white/[0.08] text-primary"
                     : "text-neutral-400 active:bg-white/[0.06]",
@@ -197,7 +248,7 @@ export function MobileBottomNav() {
                       : item.href
                   }
                   className={[
-                    "relative",
+                    "relative flex items-center justify-center",
                     isCart &&
                     cartAnimationKey > 0
                       ? "animate-cart-nav-pop"
@@ -206,10 +257,11 @@ export function MobileBottomNav() {
                 >
                   <Icon
                     className={[
-                      "size-5 transition-transform duration-200",
+                      "size-[21px] transition-transform duration-200",
+
                       active
-                        ? "stroke-[2.4]"
-                        : "",
+                        ? "stroke-[2.5]"
+                        : "stroke-[2]",
                     ].join(" ")}
                   />
 
@@ -219,7 +271,14 @@ export function MobileBottomNav() {
                       key={
                         cartItemsCount
                       }
-                      className="animate-cart-badge absolute -right-3.5 -top-2.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-black leading-none text-white shadow-[0_4px_12px_rgba(255,85,0,0.3)]"
+                      className={[
+                        "animate-cart-badge",
+                        "absolute -right-3.5 -top-2.5",
+                        "flex min-h-5 min-w-5 items-center justify-center",
+                        "rounded-full bg-primary px-1",
+                        "text-[9px] font-black leading-none text-white",
+                        "shadow-[0_4px_12px_rgba(255,85,0,0.35)]",
+                      ].join(" ")}
                     >
                       {cartItemsCount >
                       99
@@ -229,7 +288,14 @@ export function MobileBottomNav() {
                   ) : null}
                 </span>
 
-                <span className="font-condensed text-[11px] font-bold uppercase tracking-[0.04em]">
+                <span
+                  className={[
+                    "font-condensed text-[10px] font-bold uppercase tracking-[0.04em]",
+                    active
+                      ? "text-primary"
+                      : "text-neutral-400",
+                  ].join(" ")}
+                >
                   {item.label}
                 </span>
               </Link>

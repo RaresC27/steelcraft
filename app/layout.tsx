@@ -1,4 +1,8 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+  Viewport,
+} from "next";
+
 import {
   Barlow,
   Barlow_Condensed,
@@ -12,6 +16,13 @@ import { MobileHeader } from "@/components/layout/mobile-header";
 import { MobileCartToast } from "@/components/cart/mobile-cart-toast";
 
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0a0a0a",
+};
 
 const barlow = Barlow({
   subsets: ["latin", "latin-ext"],
