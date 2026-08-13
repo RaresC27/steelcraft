@@ -2,6 +2,7 @@ import {
   ArrowRight,
   Hammer,
   ShieldCheck,
+  Sparkles,
   Truck,
 } from "lucide-react";
 import Link from "next/link";
@@ -78,47 +79,97 @@ export default async function HomePage() {
       take: 6,
     });
 
+  const [firstFeaturedProduct, ...remainingFeaturedProducts] =
+    featuredProducts;
+
   return (
-    <main>
+    <main className="overflow-hidden">
       <HomeHero />
 
       <ProductCategoriesSection />
 
       {featuredProducts.length > 0 ? (
-        <section className="bg-neutral-100 py-12 sm:py-16 lg:py-20">
-          <Container>
-            <div className="flex items-end justify-between gap-5">
-              <div>
-                <p className="font-condensed text-xs font-bold uppercase tracking-[0.16em] text-primary sm:text-sm">
-                  Produse recomandate
-                </p>
+        <section className="relative overflow-hidden bg-[#f4f4f2] py-12 sm:py-16 lg:py-24">
+          <div className="pointer-events-none absolute -right-28 top-10 size-72 rounded-full bg-primary/[0.04] blur-3xl" />
 
-                <h2 className="font-display mt-2 text-4xl uppercase leading-none text-[#111111] sm:text-5xl lg:text-6xl">
-                  Descoperă produsele
+          <Container className="relative">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-sm">
+                  <Sparkles className="size-3.5 text-primary" />
+
+                  <span className="font-condensed text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-600">
+                    Selecția SteelCraft
+                  </span>
+                </div>
+
+                <h2 className="font-display mt-4 max-w-2xl text-4xl uppercase leading-[0.92] text-[#111111] sm:text-5xl lg:text-6xl">
+                  Produse
+                  <span className="block text-primary">
+                    recomandate
+                  </span>
                 </h2>
 
-                <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-600 sm:text-base sm:leading-7">
-                  Produse selectate din gama SteelCraft,
-                  disponibile în variante standard sau
-                  adaptate cerințelor proiectului.
+                <p className="mt-4 max-w-xl text-sm leading-6 text-neutral-600 sm:text-base sm:leading-7">
+                  O selecție de produse reprezentative,
+                  disponibile în variante standard sau adaptate
+                  cerințelor proiectului.
                 </p>
               </div>
 
               <Link
                 href="/produse"
-                className="font-condensed hidden shrink-0 items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-primary transition hover:gap-3 sm:flex"
+                className="font-condensed hidden shrink-0 items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-[#111111] transition hover:text-primary sm:inline-flex"
               >
-                Vezi toate
+                Vezi toate produsele
                 <ArrowRight className="size-4" />
               </Link>
             </div>
 
-            <div className="mobile-scrollbar-hidden -mx-3 mt-7 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
-              {featuredProducts.map(
-                (product) => (
+            <div className="mt-8 lg:mt-10">
+              {firstFeaturedProduct ? (
+                <div className="sm:hidden">
+                  <ProductCard
+                    product={{
+                      name: firstFeaturedProduct.name,
+                      slug: firstFeaturedProduct.slug,
+                      shortDescription:
+                        firstFeaturedProduct.shortDescription,
+                      material:
+                        firstFeaturedProduct.material,
+                      priceLabel:
+                        firstFeaturedProduct.priceLabel,
+                      image:
+                        firstFeaturedProduct.image,
+
+                      category: {
+                        name:
+                          firstFeaturedProduct.category
+                            .name,
+                        slug:
+                          firstFeaturedProduct.category
+                            .slug,
+                      },
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              <div
+                className={[
+                  "mobile-scrollbar-hidden mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 sm:mt-0 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-3",
+                  firstFeaturedProduct
+                    ? ""
+                    : "mt-0",
+                ].join(" ")}
+              >
+                {(firstFeaturedProduct
+                  ? remainingFeaturedProducts
+                  : featuredProducts
+                ).map((product) => (
                   <div
                     key={product.id}
-                    className="w-[86vw] max-w-[360px] shrink-0 snap-start sm:w-auto sm:max-w-none"
+                    className="w-[82vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none"
                   >
                     <ProductCard
                       product={{
@@ -143,8 +194,8 @@ export default async function HomePage() {
                       }}
                     />
                   </div>
-                ),
-              )}
+                ))}
+              </div>
             </div>
 
             <Link
@@ -160,41 +211,55 @@ export default async function HomePage() {
 
       <Section className="bg-white">
         <Container>
-          <SectionHeading
-            accent="SteelCraft?"
-            description="Punem accent pe materiale potrivite, execuție atentă și soluții adaptate fiecărui client."
-          >
-            De ce să alegi
-          </SectionHeading>
+          <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-14">
+            <div>
+              <SectionHeading
+                accent="SteelCraft?"
+                description="Punem accent pe materiale potrivite, execuție atentă și soluții adaptate fiecărui client."
+                className="mb-0"
+              >
+                De ce să alegi
+              </SectionHeading>
 
-          <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
-            {benefits.map((benefit) => {
-              const Icon = benefit.icon;
+              <p className="mt-5 max-w-md text-sm leading-7 text-neutral-500 sm:text-base">
+                De la produse standard până la confecții
+                personalizate, încercăm să păstrăm procesul
+                simplu și clar de la prima discuție până la
+                livrare.
+              </p>
+            </div>
 
-              return (
-                <Card
-                  key={benefit.title}
-                  className="group rounded-2xl border-neutral-200 py-0 transition duration-300 hover:-translate-y-1 hover:border-primary hover:shadow-[0_18px_40px_rgba(255,85,0,0.08)] sm:rounded-sm"
-                >
-                  <CardContent className="flex flex-col items-start px-5 py-6 text-left sm:items-center sm:px-7 sm:py-10 sm:text-center">
-                    <div className="mb-5 flex size-14 items-center justify-center rounded-xl bg-[#111111] text-primary transition duration-300 group-hover:bg-primary group-hover:text-white sm:mb-6 sm:size-[72px] sm:rounded-sm">
-                      <Icon
-                        className="size-6 sm:size-8"
-                        strokeWidth={1.8}
-                      />
-                    </div>
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+              {benefits.map((benefit) => {
+                const Icon = benefit.icon;
 
-                    <h2 className="font-condensed text-base font-bold uppercase tracking-[0.08em] sm:text-lg">
-                      {benefit.title}
-                    </h2>
+                return (
+                  <Card
+                    key={benefit.title}
+                    className="group overflow-hidden rounded-2xl border-neutral-200 py-0 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_18px_40px_rgba(255,85,0,0.08)] sm:rounded-xl"
+                  >
+                    <CardContent className="flex h-full flex-row items-start gap-4 p-4 sm:flex-col sm:p-5 lg:p-6">
+                      <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#111111] text-primary transition duration-300 group-hover:bg-primary group-hover:text-white sm:size-14">
+                        <Icon
+                          className="size-5 sm:size-6"
+                          strokeWidth={1.8}
+                        />
+                      </div>
 
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground sm:mt-3 sm:leading-7">
-                      {benefit.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      <div>
+                        <h3 className="font-condensed text-sm font-bold uppercase tracking-[0.07em] text-[#111111] sm:text-base">
+                          {benefit.title}
+                        </h3>
+
+                        <p className="mt-2 text-sm leading-6 text-neutral-600">
+                          {benefit.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         </Container>
       </Section>
