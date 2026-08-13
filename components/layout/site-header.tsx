@@ -37,7 +37,13 @@ const navigationItems = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 bg-[#0a0a0a]/96 text-white backdrop-blur-xl">
+    <header
+      className="sticky top-0 z-50 bg-[#0a0a0a] text-white"
+      style={{
+        paddingTop:
+          "env(safe-area-inset-top)",
+      }}
+    >
       {/* Bara informativă desktop */}
       <div className="hidden lg:block">
         <Container className="flex h-9 items-center justify-between">
@@ -54,11 +60,13 @@ export function SiteHeader() {
               href="tel:+40752315475"
               className="group flex items-center gap-2 text-xs font-semibold text-neutral-200 transition-colors hover:text-white"
             >
-              <span className="flex size-7 items-center justify-center rounded-full bg-white/[0.06] text-primary transition group-hover:bg-primary group-hover:text-white">
+              <span className="flex size-7 items-center justify-center rounded-full bg-white/[0.06] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
                 <Phone className="size-3.5" />
               </span>
 
-              +40 752 315 475
+              <span>
+                +40 752 315 475
+              </span>
             </a>
           </div>
         </Container>
