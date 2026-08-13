@@ -1,10 +1,10 @@
 import Link from "next/link";
 import {
+  ArrowRight,
   Clock3,
   Mail,
   MapPin,
   Phone,
-  ShoppingBag,
 } from "lucide-react";
 
 import { Container } from "@/components/layout/container";
@@ -21,7 +21,7 @@ const navigationLinks = [
   },
   {
     label: "Confecții la comandă",
-    href: "/confectii-la-comanda",
+    href: "/la-comanda",
   },
   {
     label: "Despre noi",
@@ -58,20 +58,20 @@ const usefulLinks = [
 
 const productLinks = [
   {
-    label: "Porți metalice",
-    href: "/produse?category=porti-metalice",
+    label: "Hrănitoare pentru animale",
+    href: "/produse?category=hranitoare-pentru-animale",
   },
   {
-    label: "Garduri metalice",
-    href: "/produse?category=garduri-metalice",
+    label: "Adăpători și vălăuri",
+    href: "/produse?category=adapatori",
   },
   {
-    label: "Balustrade",
-    href: "/produse?category=balustrade",
+    label: "Confecții din tablă",
+    href: "/produse?category=confectii-din-tabla",
   },
   {
-    label: "Structuri metalice",
-    href: "/produse?category=structuri-metalice",
+    label: "Confecții din inox",
+    href: "/produse?category=confectii-din-inox",
   },
 ];
 
@@ -79,28 +79,60 @@ export function SiteFooter() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-white/10 bg-[#0b0b0b] text-white">
-      <div className="border-b border-white/10">
-        <Container className="grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.25fr_0.75fr_0.75fr_1fr] lg:gap-12 lg:py-18">
+    <footer
+      id="site-footer"
+      className="bg-[#0a0a0a] text-white"
+    >
+      <Container className="py-10 sm:py-14 lg:py-16">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.75fr_0.75fr_1fr] lg:gap-12">
+          {/* Brand */}
           <div>
             <SiteLogo light />
 
-            <p className="mt-5 max-w-sm text-sm leading-7 text-neutral-400">
-              Produse și confecții metalice realizate pentru ferme,
-              gospodării, proprietăți rezidențiale și proiecte
-              comerciale. Punem accent pe materiale rezistente,
-              execuție atentă și soluții adaptate fiecărui client.
+            <p className="mt-5 max-w-md text-sm leading-7 text-neutral-300">
+              Hrănitoare, adăpători și confecții metalice
+              realizate din tablă neagră, tablă zincată,
+              inox și oțel, standard sau la comandă.
             </p>
 
-            <Link
-              href="/produse"
-              className="font-condensed mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-sm bg-primary px-6 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0b]"
-            >
-              <ShoppingBag className="size-4" />
-              Vezi produsele
-            </Link>
+            <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
+              <Link
+                href="/la-comanda"
+                className="font-condensed inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:opacity-90 active:scale-[0.98] sm:rounded-sm"
+              >
+                Solicită ofertă
+                <ArrowRight className="size-4" />
+              </Link>
+
+              <Link
+                href="/produse"
+                className="font-condensed inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-5 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:border-white/30 hover:bg-white/[0.08] active:scale-[0.98] sm:rounded-sm"
+              >
+                Vezi produsele
+              </Link>
+            </div>
+
+            {/* Contact rapid pe mobil */}
+            <div className="mt-8 lg:hidden">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MobileContactLink
+                  icon={Phone}
+                  label="Telefon"
+                  value="+40 000 000 000"
+                  href="tel:+40000000000"
+                />
+
+                <MobileContactLink
+                  icon={Mail}
+                  label="Email"
+                  value="contact@steelcraft.ro"
+                  href="mailto:contact@steelcraft.ro"
+                />
+              </div>
+            </div>
           </div>
 
+          {/* Navigare */}
           <FooterColumn title="Navigare">
             {navigationLinks.map((link) => (
               <FooterLink
@@ -112,6 +144,7 @@ export function SiteFooter() {
             ))}
           </FooterColumn>
 
+          {/* Produse */}
           <FooterColumn title="Produse">
             {productLinks.map((link) => (
               <FooterLink
@@ -123,12 +156,17 @@ export function SiteFooter() {
             ))}
           </FooterColumn>
 
-          <div>
-            <h2 className="font-condensed text-sm font-bold uppercase tracking-[0.18em] text-white">
+          {/* Contact desktop */}
+          <div className="hidden lg:block">
+            <p className="font-condensed text-xs font-bold uppercase tracking-[0.16em] text-neutral-300">
               Contact
+            </p>
+
+            <h2 className="font-display mt-2 text-3xl uppercase leading-none text-white">
+              Hai să discutăm
             </h2>
 
-            <div className="mt-5 space-y-5">
+            <div className="mt-6 space-y-5">
               <FooterContactItem
                 icon={Phone}
                 label="Telefon"
@@ -146,7 +184,7 @@ export function SiteFooter() {
               <FooterContactItem
                 icon={MapPin}
                 label="Locație"
-                value="România, Baia Sprie, Maramures"
+                value="Baia Sprie, Maramureș"
               />
 
               <FooterContactItem
@@ -156,42 +194,48 @@ export function SiteFooter() {
               />
             </div>
           </div>
-        </Container>
-      </div>
+        </div>
 
-      <div className="border-b border-white/10">
-        <Container className="flex flex-col gap-5 py-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-6 text-neutral-500">
-            Informațiile privind prețurile, livrarea și
-            disponibilitatea produselor pot fi actualizate în
-            funcție de proiect și stoc.
+        {/* Legal */}
+        <div className="mt-10 pt-2 sm:mt-12">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <nav
+              aria-label="Linkuri legale"
+              className="flex flex-wrap gap-x-5 gap-y-3"
+            >
+              {usefulLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="font-condensed text-xs font-semibold uppercase tracking-[0.07em] text-neutral-300 transition-colors hover:text-primary"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+
+            <p className="max-w-xl text-xs leading-6 text-neutral-400 lg:text-right">
+              Prețurile, disponibilitatea și termenul de
+              execuție pot varia în funcție de produs,
+              dimensiuni și specificațiile proiectului.
+            </p>
+          </div>
+        </div>
+
+        {/* Copyright */}
+        <div className="mt-7 flex flex-col gap-2 pt-1 text-xs text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            © {currentYear}{" "}
+            <span className="font-semibold text-neutral-200">
+              SteelCraft
+            </span>
+            . Toate drepturile rezervate.
           </p>
 
-          <nav
-            aria-label="Linkuri legale"
-            className="flex flex-wrap gap-x-5 gap-y-3"
-          >
-            {usefulLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="font-condensed text-xs font-bold uppercase tracking-[0.1em] text-neutral-400 transition hover:text-primary"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        </Container>
-      </div>
-
-      <Container className="flex flex-col gap-3 py-5 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
-        <p>
-          © {currentYear} SteelCraft. Toate drepturile rezervate.
-        </p>
-
-        <p>
-          Confecții metalice standard și la comandă.
-        </p>
+          <p className="text-neutral-400">
+            Confecții metalice standard și la comandă.
+          </p>
+        </div>
       </Container>
     </footer>
   );
@@ -208,11 +252,11 @@ function FooterColumn({
 }: FooterColumnProps) {
   return (
     <div>
-      <h2 className="font-condensed text-sm font-bold uppercase tracking-[0.18em] text-white">
+      <p className="font-condensed text-xs font-bold uppercase tracking-[0.16em] text-neutral-300">
         {title}
-      </h2>
+      </p>
 
-      <nav className="mt-5 flex flex-col items-start gap-3">
+      <nav className="mt-4 flex flex-col items-start gap-3">
         {children}
       </nav>
     </div>
@@ -231,10 +275,8 @@ function FooterLink({
   return (
     <Link
       href={href}
-      className="group inline-flex items-center gap-2 text-sm text-neutral-400 transition hover:text-primary"
+      className="text-sm font-medium text-neutral-300 transition-colors duration-200 hover:text-primary"
     >
-      <span className="h-px w-3 bg-neutral-700 transition group-hover:w-5 group-hover:bg-primary" />
-
       {children}
     </Link>
   );
@@ -257,16 +299,16 @@ function FooterContactItem({
 }: FooterContactItemProps) {
   const content = (
     <span className="group flex items-start gap-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-white/10 bg-white/5 text-primary transition group-hover:border-primary group-hover:bg-primary group-hover:text-white">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-primary transition group-hover:bg-primary group-hover:text-white">
         <Icon className="size-4" />
       </span>
 
-      <span>
-        <span className="font-condensed block text-xs font-bold uppercase tracking-[0.12em] text-neutral-500">
+      <span className="min-w-0">
+        <span className="font-condensed block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">
           {label}
         </span>
 
-        <span className="mt-1 block text-sm text-neutral-300 transition group-hover:text-white">
+        <span className="mt-1 block break-words text-sm font-medium text-neutral-200 transition-colors group-hover:text-white">
           {value}
         </span>
       </span>
@@ -285,4 +327,41 @@ function FooterContactItem({
   }
 
   return content;
+}
+
+type MobileContactLinkProps = {
+  icon: React.ComponentType<{
+    className?: string;
+  }>;
+  label: string;
+  value: string;
+  href: string;
+};
+
+function MobileContactLink({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: MobileContactLinkProps) {
+  return (
+    <a
+      href={href}
+      className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/[0.06] p-3.5 transition active:scale-[0.98]"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+        <Icon className="size-4" />
+      </span>
+
+      <span className="min-w-0">
+        <span className="font-condensed block text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">
+          {label}
+        </span>
+
+        <span className="mt-0.5 block truncate text-sm font-medium text-white">
+          {value}
+        </span>
+      </span>
+    </a>
+  );
 }

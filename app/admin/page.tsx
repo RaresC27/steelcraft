@@ -6,6 +6,7 @@ import {
   CalendarDays,
   FolderPlus,
   FolderTree,
+  FileText,
   ListChecks,
   Mail,
   MessageSquareText,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { AdminLogoutButton } from "@/components/admin/admin-logout-button";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { prisma } from "@/lib/prisma";
 
 const orderStatusLabels = {
@@ -61,6 +63,8 @@ function formatCurrentDate(value: Date) {
 }
 
 export default async function AdminDashboardPage() {
+  await requireAdmin();
+
   const [
     totalOrders,
     newOrders,
@@ -69,6 +73,7 @@ export default async function AdminDashboardPage() {
     outOfStockProducts,
     totalCategories,
     contactMessages,
+    newCustomProjectRequests,
     salesAggregate,
     latestOrders,
   ] = await Promise.all([
@@ -108,6 +113,12 @@ export default async function AdminDashboardPage() {
     prisma.category.count(),
 
     prisma.contactMessage.count({
+      where: {
+        status: "NEW",
+      },
+    }),
+
+    prisma.customProjectRequest.count({
       where: {
         status: "NEW",
       },
@@ -189,6 +200,14 @@ export default async function AdminDashboardPage() {
       icon: FolderTree,
     },
     {
+      label: "Cereri noi",
+      value: newCustomProjectRequests,
+      description: "Proiecte personalizate",
+      href: "/admin/cereri-personalizate",
+      icon: FileText,
+      attention: newCustomProjectRequests > 0,
+    },
+    {
       label: "Mesaje noi",
       value: contactMessages,
       description: "Solicitări de contact",
@@ -200,20 +219,19 @@ export default async function AdminDashboardPage() {
 
   return (
     <main className="min-h-screen bg-neutral-100 pb-[max(2rem,env(safe-area-inset-bottom))]">
-      {/* Header mobil și desktop */}
-      <header className="border-b border-white/10 bg-[#111111] text-white">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+      <header className="bg-[#111111] text-white">
+        <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pb-6 sm:pt-7 lg:px-8">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="font-condensed text-[11px] font-bold uppercase tracking-[0.2em] text-primary sm:text-sm">
                 SteelCraft Admin
               </p>
 
-              <h1 className="font-display mt-1 text-4xl uppercase leading-none sm:mt-2 sm:text-6xl">
+              <h1 className="font-display mt-1 text-[2.6rem] uppercase leading-none sm:mt-2 sm:text-6xl">
                 Dashboard
               </h1>
 
-              <div className="mt-3 flex items-center gap-2 text-xs text-neutral-400 sm:text-sm">
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-neutral-400 sm:mt-3 sm:text-sm">
                 <CalendarDays className="size-4 shrink-0 text-primary" />
 
                 <span className="capitalize">
@@ -227,83 +245,107 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 sm:max-w-xl">
-            <Link
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:max-w-3xl sm:gap-3">
+            <HeaderCounter
               href="/admin/comenzi"
-              className="flex min-h-16 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 transition active:scale-[0.98] hover:border-primary/50 hover:bg-white/[0.08] sm:rounded-sm"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white sm:rounded-sm">
-                <ShoppingCart className="size-5" />
-              </span>
+              value={newOrders}
+              label="comenzi noi"
+              icon={ShoppingCart}
+              primary
+            />
 
-              <span>
-                <span className="font-display block text-2xl leading-none">
-                  {newOrders}
-                </span>
+            <HeaderCounter
+              href="/admin/cereri-personalizate"
+              value={newCustomProjectRequests}
+              label="cereri noi"
+              icon={FileText}
+            />
 
-                <span className="mt-1 block text-[11px] text-neutral-400">
-                  comenzi noi
-                </span>
-              </span>
-            </Link>
-
-            <Link
+            <HeaderCounter
               href="/admin/mesaje"
-              className="flex min-h-16 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 transition active:scale-[0.98] hover:border-primary/50 hover:bg-white/[0.08] sm:rounded-sm"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-primary sm:rounded-sm">
-                <Mail className="size-5" />
-              </span>
-
-              <span>
-                <span className="font-display block text-2xl leading-none">
-                  {contactMessages}
-                </span>
-
-                <span className="mt-1 block text-[11px] text-neutral-400">
-                  mesaje noi
-                </span>
-              </span>
-            </Link>
+              value={contactMessages}
+              label="mesaje noi"
+              icon={Mail}
+            />
           </div>
+
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
-        {/* Navigație scrollabilă pe mobil */}
-        <nav
-          aria-label="Navigație administrare"
-          className="mobile-scrollbar-hidden -mx-3 mb-6 flex gap-2 overflow-x-auto px-3 pb-2 sm:mx-0 sm:mb-8 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
-        >
-          <AdminNavigationLink
-            href="/admin"
-            label="Dashboard"
-            active
-          />
+      <div className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 shadow-sm backdrop-blur-xl">
+        <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8">
+          <nav
+            aria-label="Navigație administrare"
+            className="mobile-scrollbar-hidden flex gap-2 overflow-x-auto py-2.5"
+          >
+            <AdminTopNavigationLink
+              href="/admin"
+              label="Dashboard"
+              active
+            />
 
-          <AdminNavigationLink
-            href="/admin/comenzi"
-            label="Comenzi"
-          />
+            <AdminTopNavigationLink
+              href="/admin/comenzi"
+              label="Comenzi"
+            />
 
-          <AdminNavigationLink
-            href="/admin/produse"
-            label="Produse"
-          />
+            <AdminTopNavigationLink
+              href="/admin/cereri-personalizate"
+              label="La comandă"
+              attention={newCustomProjectRequests > 0}
+            />
 
-          <AdminNavigationLink
-            href="/admin/categorii"
-            label="Categorii"
-          />
+            <AdminTopNavigationLink
+              href="/admin/produse"
+              label="Produse"
+            />
 
-          <AdminNavigationLink
-            href="/admin/mesaje"
-            label="Mesaje"
-          />
-        </nav>
+            <AdminTopNavigationLink
+              href="/admin/produse/nou"
+              label="Produs nou"
+            />
 
-        {/* Statistici */}
-        <section className="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-3">
+            <AdminTopNavigationLink
+              href="/admin/categorii"
+              label="Categorii"
+            />
+
+            <AdminTopNavigationLink
+              href="/admin/categorii/nou"
+              label="Categorie nouă"
+            />
+
+            <AdminTopNavigationLink
+              href="/admin/mesaje"
+              label="Mesaje"
+              attention={contactMessages > 0}
+            />
+          </nav>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+        <section className="mb-4 flex items-center justify-between px-1 sm:mb-6 sm:px-0">
+          <div>
+            <p className="font-condensed text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+              Privire rapidă
+            </p>
+            <h2 className="font-display mt-1 text-2xl uppercase leading-none text-[#111111] sm:text-3xl">
+              Situația de azi
+            </h2>
+          </div>
+
+          <Link
+            href="/"
+            target="_blank"
+            className="font-condensed inline-flex min-h-10 items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 text-[10px] font-bold uppercase tracking-[0.06em] text-neutral-700 transition active:scale-95 hover:border-primary hover:text-primary sm:rounded-sm sm:px-4 sm:text-xs"
+          >
+            Vezi site-ul
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </section>
+
+        <section className="grid grid-cols-2 gap-2.5 sm:gap-5 xl:grid-cols-3">
           {stats.map((stat) => {
             const Icon = stat.icon;
 
@@ -311,29 +353,29 @@ export default async function AdminDashboardPage() {
               <Link
                 key={stat.label}
                 href={stat.href}
-                className="group relative min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition active:scale-[0.98] hover:border-primary/40 hover:shadow-md sm:rounded-sm sm:p-6"
+                className="group relative min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition active:scale-[0.98] hover:border-primary/40 hover:shadow-md sm:rounded-sm sm:p-6"
               >
                 {stat.attention ? (
                   <span className="absolute right-3 top-3 size-2 rounded-full bg-primary shadow-[0_0_10px_rgba(255,85,0,0.7)]" />
                 ) : null}
 
-                <div className="flex items-start justify-between gap-2">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#111111] text-primary transition group-hover:bg-primary group-hover:text-white sm:size-12 sm:rounded-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#111111] text-primary transition group-hover:bg-primary group-hover:text-white sm:size-12 sm:rounded-sm">
                     <Icon className="size-4 sm:size-5" />
                   </span>
 
-                  <ArrowRight className="size-4 text-neutral-300 transition group-hover:translate-x-1 group-hover:text-primary" />
+                  <ArrowRight className="size-3.5 text-neutral-300 transition group-hover:translate-x-1 group-hover:text-primary sm:size-4" />
                 </div>
 
-                <p className="font-display mt-5 break-words text-3xl uppercase leading-none text-[#111111] sm:text-4xl">
+                <p className="font-display mt-4 break-words text-[1.8rem] uppercase leading-none text-[#111111] sm:mt-5 sm:text-4xl">
                   {stat.value}
                 </p>
 
-                <p className="font-condensed mt-2 text-xs font-bold uppercase tracking-[0.08em] text-[#111111] sm:text-sm">
+                <p className="font-condensed mt-1.5 text-[11px] font-bold uppercase tracking-[0.07em] text-[#111111] sm:mt-2 sm:text-sm">
                   {stat.label}
                 </p>
 
-                <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-neutral-500 sm:text-sm">
+                <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-neutral-500 sm:line-clamp-2 sm:text-sm sm:leading-5">
                   {stat.description}
                 </p>
               </Link>
@@ -341,16 +383,16 @@ export default async function AdminDashboardPage() {
           })}
         </section>
 
-        <div className="mt-6 grid gap-6 sm:mt-8 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
+        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
           {/* Ultimele comenzi */}
           <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm sm:rounded-sm">
-            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-4 py-5 sm:items-center sm:px-7">
+            <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-4 sm:px-7 sm:py-5">
               <div>
                 <p className="font-condensed text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
                   Activitate recentă
                 </p>
 
-                <h2 className="font-display mt-1 text-3xl uppercase leading-none text-[#111111]">
+                <h2 className="font-display mt-1 text-[1.75rem] uppercase leading-none text-[#111111] sm:text-3xl">
                   Ultimele comenzi
                 </h2>
 
@@ -389,7 +431,7 @@ export default async function AdminDashboardPage() {
                     <Link
                       key={order.id}
                       href={`/admin/comenzi/${order.id}`}
-                      className="group block p-4 transition active:bg-neutral-50"
+                      className="group block px-4 py-4 transition active:bg-neutral-50"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
@@ -544,7 +586,7 @@ export default async function AdminDashboardPage() {
             )}
           </section>
 
-          <aside className="space-y-6">
+          <aside className="space-y-5 sm:space-y-6">
             {/* Acțiuni rapide */}
             <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:rounded-sm sm:p-6">
               <div>
@@ -557,7 +599,7 @@ export default async function AdminDashboardPage() {
                 </h2>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-1">
+              <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-1 xl:gap-3">
                 <QuickAction
                   href="/admin/produse/nou"
                   label="Adaugă produs"
@@ -574,6 +616,12 @@ export default async function AdminDashboardPage() {
                   href="/admin/comenzi"
                   label="Comenzi"
                   icon={ListChecks}
+                />
+
+                <QuickAction
+                  href="/admin/cereri-personalizate"
+                  label="Cereri la comandă"
+                  icon={FileText}
                 />
 
                 <QuickAction
@@ -621,6 +669,12 @@ export default async function AdminDashboardPage() {
                 />
 
                 <DashboardDetail
+                  label="Cereri la comandă"
+                  value={String(newCustomProjectRequests)}
+                  attention={newCustomProjectRequests > 0}
+                />
+
+                <DashboardDetail
                   label="Mesaje noi"
                   value={String(contactMessages)}
                   attention={contactMessages > 0}
@@ -634,29 +688,79 @@ export default async function AdminDashboardPage() {
   );
 }
 
-type AdminNavigationLinkProps = {
+type HeaderCounterProps = {
+  href: string;
+  value: number;
+  label: string;
+  icon: LucideIcon;
+  primary?: boolean;
+};
+
+function HeaderCounter({
+  href,
+  value,
+  label,
+  icon: Icon,
+  primary = false,
+}: HeaderCounterProps) {
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-[58px] min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-2.5 transition active:scale-[0.98] hover:border-primary/50 hover:bg-white/[0.08] sm:min-h-16 sm:gap-3 sm:rounded-sm sm:px-4"
+    >
+      <span
+        className={[
+          "flex size-9 shrink-0 items-center justify-center rounded-xl transition sm:size-10 sm:rounded-sm",
+          primary
+            ? "bg-primary text-white"
+            : "bg-white/10 text-primary group-hover:bg-primary group-hover:text-white",
+        ].join(" ")}
+      >
+        <Icon className="size-4 sm:size-5" />
+      </span>
+
+      <span className="min-w-0">
+        <span className="font-display block text-xl leading-none sm:text-2xl">
+          {value}
+        </span>
+
+        <span className="mt-1 block truncate text-[9px] text-neutral-400 sm:text-[11px]">
+          {label}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+type AdminTopNavigationLinkProps = {
   href: string;
   label: string;
   active?: boolean;
+  attention?: boolean;
 };
 
-function AdminNavigationLink({
+function AdminTopNavigationLink({
   href,
   label,
   active = false,
-}: AdminNavigationLinkProps) {
+  attention = false,
+}: AdminTopNavigationLinkProps) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "font-condensed flex min-h-10 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-bold uppercase tracking-[0.08em] transition active:scale-95 sm:rounded-sm sm:text-sm",
+        "font-condensed relative flex min-h-10 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-bold uppercase tracking-[0.07em] transition active:scale-95 sm:rounded-sm sm:text-sm",
         active
-          ? "border-primary bg-primary text-white"
-          : "border-neutral-300 bg-white text-neutral-700 hover:border-primary hover:text-primary",
+          ? "border-primary bg-primary text-white shadow-sm"
+          : "border-neutral-200 bg-white text-neutral-700 hover:border-primary/60 hover:text-primary",
       ].join(" ")}
     >
       {label}
+
+      {attention ? (
+        <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,85,0,0.85)]" />
+      ) : null}
     </Link>
   );
 }
@@ -675,7 +779,7 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="group flex min-h-[104px] flex-col justify-between rounded-xl border border-neutral-200 bg-neutral-50 p-3 transition active:scale-[0.98] hover:border-primary/50 hover:bg-primary/[0.04] sm:rounded-sm xl:min-h-14 xl:flex-row xl:items-center xl:p-4"
+      className="group flex min-h-[88px] flex-col justify-between rounded-xl border border-neutral-200 bg-neutral-50 p-3 transition active:scale-[0.98] hover:border-primary/50 hover:bg-primary/[0.04] sm:min-h-[96px] sm:rounded-sm xl:min-h-14 xl:flex-row xl:items-center xl:p-4"
     >
       <span className="flex size-10 items-center justify-center rounded-xl bg-[#111111] text-primary transition group-hover:bg-primary group-hover:text-white sm:rounded-sm">
         <Icon className="size-4" />
